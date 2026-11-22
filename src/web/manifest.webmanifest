@@ -1,0 +1,10 @@
+{
+  "name": "Home Pharmacy — Household Health Hub",
+  "short_name": "Home Pharmacy",
+  "description": "Private household protocol catalog, dual-track stack spreader, and universal multi-AI health hub.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b1512",
+  "theme_color": "#0b1512",
+  "icons": []
+}

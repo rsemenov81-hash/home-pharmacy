@@ -1,0 +1,29 @@
+{
+  "name": "home-pharmacy",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Home Pharmacy — Universal Household Health Hub (Peptides, PEDs, Vitamins & Supplements, Dermatology)",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "check": "node tools/build.mjs --check",
+    "dev": "node src/backend/node-server.js",
+    "start": "node src/backend/node-server.js",
+    "test": "npm run test:unit",
+    "test:unit": "node --test \"tests/unit/*.test.mjs\"",
+    "test:e2e": "node tests/e2e/run-e2e.mjs",
+    "ci": "npm run check && npm run build && npm run test:unit && npm run test:e2e"
+  },
+  "dependencies": {
+    "lucide-react": "^1.77.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "playwright": "1.65.1"
+  }
+}

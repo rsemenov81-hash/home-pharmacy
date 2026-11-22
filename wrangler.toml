@@ -1,0 +1,25 @@
+name = "home-pharmacy-hub"
+main = "dist/worker.js"
+compatibility_date = "2026-01-01"
+
+[vars]
+MODE = "cloudflare"
+ALLOWED_ORIGINS = "https://rsemenov81-hash.github.io"
+
+# Provision a Cloudflare D1 database (strongly consistent — recommended for OAuth 2.1 DCR/PKCE):
+#   wrangler d1 create home-pharmacy-db
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "home-pharmacy-db"
+# database_id = "<YOUR_D1_DATABASE_ID>"
+
+# Optional KV fallback binding (if not using D1):
+# [[kv_namespaces]]
+# binding = "KV"
+# id = "<YOUR_KV_NAMESPACE_ID>"
+
+# Secrets (NEVER commit values — set via `wrangler secret put`):
+#   wrangler secret put HOUSEHOLD_ADMIN_TOKEN
+#   wrangler secret put HOUSEHOLD_PASSCODE
+# Optional Web Push VAPID public key:
+#   wrangler secret put VAPID_PUBLIC_KEY
