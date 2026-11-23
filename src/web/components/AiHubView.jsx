@@ -515,34 +515,43 @@ export function AiHubView({
 
         {keys.length > 0 ? (
           <div className="stack-sm">
-            {keys.map((k) => (
-              <div key={k.id} className="card-subtle space-between">
-                <div>
-                  <strong>{k.name}</strong> <span className="pill pill-accent">{k.scope}</span>
-                  <div className="dim num">{k.prefix || 'hp_key_...'} · {k.createdAt ? k.createdAt.slice(0, 10) : '—'}</div>
+            {keys.map((k) => {
+              const shortPrefix = (k.prefix || 'hp_key').slice(0, 12);
+              return (
+                <div key={k.id} className="card-subtle space-between">
+                  <div>
+                    <strong>{k.name}</strong> <span className="pill pill-accent">{k.scope}</span>
+                    <div className="dim num" title={k.prefix || ''}>
+                      {shortPrefix}… · {k.createdAt ? k.createdAt.slice(0, 10) : '—'}
+                    </div>
+                  </div>
+                  <button type="button" className="btn btn-danger btn-sm" onClick={() => handleRevokeKey(k.id)}>
+                    <Trash2 size={13} /> Revoke
+                  </button>
                 </div>
-                <button type="button" className="btn btn-danger btn-sm" onClick={() => handleRevokeKey(k.id)}>
-                  <Trash2 size={13} /> Revoke
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : null}
 
         {oauthClients.length > 0 ? (
           <div className="stack-sm">
             <div className="eyebrow">CONNECTED OAUTH APPS</div>
-            {oauthClients.map((c) => (
-              <div key={c.client_id || c.id} className="card-subtle space-between">
-                <div>
-                  <strong>{c.client_name || c.client_id}</strong>
-                  <div className="dim num">{c.client_id}</div>
+            {oauthClients.map((c) => {
+              const cid = String(c.client_id || c.id || '');
+              const shortCid = cid.length > 14 ? `${cid.slice(0, 10)}…` : cid;
+              return (
+                <div key={cid} className="card-subtle space-between">
+                  <div>
+                    <strong>{c.client_name || shortCid}</strong>
+                    <div className="dim num" title={cid}>ID: {shortCid}</div>
+                  </div>
+                  <button type="button" className="btn btn-danger btn-sm" onClick={() => handleRevokeOAuth(c.client_id)}>
+                    Revoke
+                  </button>
                 </div>
-                <button type="button" className="btn btn-danger btn-sm" onClick={() => handleRevokeOAuth(c.client_id)}>
-                  Revoke
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : null}
       </section>

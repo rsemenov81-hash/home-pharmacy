@@ -1052,6 +1052,19 @@ textarea:focus {
     padding: 0.55rem 0.75rem;
   }
 
+  .topbar-inner {
+    flex-wrap: wrap;
+    row-gap: 0.55rem;
+  }
+
+  .topbar-controls {
+    display: contents;
+  }
+
+  .member-pill {
+    margin-left: auto;
+  }
+
   .main-content {
     padding: 1rem 0.8rem 1.5rem;
   }
