@@ -2,16 +2,15 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Plus,
   AlertOctagon,
-  AlertTriangle,
   Pin,
-  CheckCircle2,
+  Check,
   Sparkles,
   FlaskConical,
   Sun,
   Moon,
   Scissors,
-  Check,
   Search,
+  ChevronDown,
 } from 'lucide-react';
 import { SYSTEMIC_SLOTS, dkToday } from '../../core/index.js';
 import { api } from '../lib/api.js';
@@ -41,6 +40,7 @@ export function StackBuilderView({
   const [newStackName, setNewStackName] = useState('');
   const [pinEditingItem, setPinEditingItem] = useState(null);
   const [pinDraftSlot, setPinDraftSlot] = useState('');
+  const [loggedIds, setLoggedIds] = useState(() => new Set());
   const [statusMsg, setStatusMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [pickerSection, setPickerSection] = useState('all');
@@ -163,24 +163,27 @@ export function StackBuilderView({
 
   const handleCreateStack = async (e) => {
     e.preventDefault();
-    const clean = newStackName.trim() || `${activeMember?.name || 'Member'} Stack`;
     setErrorMsg('');
+    const name = newStackName.trim() || `${activeMember?.name || 'Member'} Daily Stack`;
     try {
       const res = await api.post(`/api/v1/members/${encodeURIComponent(activeMemberId)}/stacks`, {
-        name: clean,
+        name,
         active: true,
-        haveOnly: false,
+        haveOnly,
         items: [],
       });
-      const created = res.json?.stack;
-      setNewStackName('');
+      const created = res.json?.stack || res.json;
       setShowNewStack(false);
+      setNewStackName('');
       if (created?.id) {
-        latestItemsByStackRef.current.set(created.id, []);
-        setOptimisticStacks((prev) => [...prev.filter((s) => s.id !== created.id), created]);
+        latestItemsByStackRef.current.set(created.id, created.items || []);
+        setOptimisticStacks((prev) => [
+          ...prev.filter((s) => s.id !== created.id),
+          { ...created, memberId: created.memberId || activeMemberId, items: created.items || [] },
+        ]);
         setSelectedStackId(created.id);
       }
-      setStatusMsg(`Created stack “${clean}”.`);
+      setStatusMsg(`Created stack “${name}”.`);
       await onRefresh();
     } catch (err) {
       setErrorMsg(err.message || 'Could not create stack.');
@@ -191,48 +194,56 @@ export function StackBuilderView({
     setErrorMsg('');
     if (whatIfEnabled) {
       setWhatIfIds((prev) => (prev.includes(compound.id) ? prev : [...prev, compound.id]));
-      setStatusMsg(`Previewing “${compound.name}” in What-If mode (stack unchanged).`);
+      setStatusMsg(`Previewing “${compound.name}” in What-If mode.`);
       return;
     }
 
     const memberSnapshot = activeMemberId;
-    const stackSnapshot = activeStack;
+    const stackIdSnapshot = activeStack?.id || null;
     const newItem = {
       compoundId: compound.id,
       doseAmount: compound.dosages?.defaultAmount || 1,
       doseUnit: compound.dosages?.defaultUnit || 'mg',
-      frequency: 'daily',
+      route: compound.dosages?.route || 'Oral',
+      enabled: true,
     };
 
-    if (stackSnapshot?.id) {
-      const cur = latestItemsByStackRef.current.get(stackSnapshot.id) ?? [...(stackSnapshot.items || [])];
-      const nextItems = [...cur.filter((i) => i.compoundId !== compound.id), newItem];
-      latestItemsByStackRef.current.set(stackSnapshot.id, nextItems);
-      setOptimisticItemsByStack((prev) => ({ ...prev, [stackSnapshot.id]: nextItems }));
+    if (stackIdSnapshot) {
+      const cur = latestItemsByStackRef.current.get(stackIdSnapshot) ?? [...(activeStack?.items || [])];
+      if (cur.some((i) => i.compoundId === compound.id)) return;
+      const next = [...cur, newItem];
+      latestItemsByStackRef.current.set(stackIdSnapshot, next);
+      setOptimisticItemsByStack((prev) => ({ ...prev, [stackIdSnapshot]: next }));
     }
 
     await enqueueStackMutation(async () => {
       try {
-        let targetId = stackSnapshot?.id || null;
+        let targetId = stackIdSnapshot;
         if (!targetId) {
           const createdRes = await api.post(`/api/v1/members/${encodeURIComponent(memberSnapshot)}/stacks`, {
-            name: `${activeMember?.name || 'Primary'} Stack`,
+            name: `${activeMember?.name || 'Member'} Daily Stack`,
             active: true,
-            items: [],
+            haveOnly,
+            items: [newItem],
           });
-          const created = createdRes.json?.stack;
+          const created = createdRes.json?.stack || createdRes.json;
           targetId = created?.id;
           if (targetId) {
             latestItemsByStackRef.current.set(targetId, [newItem]);
-            setOptimisticStacks((prev) => [...prev.filter((s) => s.id !== targetId), created]);
+            setOptimisticStacks((prev) => [
+              ...prev.filter((s) => s.id !== targetId),
+              { ...created, memberId: created.memberId || memberSnapshot, items: [newItem] },
+            ]);
             setSelectedStackId(targetId);
           }
+          setStatusMsg(`Added “${compound.name}” to your new stack.`);
+          return;
         }
-        if (!targetId) return;
-        const nextItems = latestItemsByStackRef.current.get(targetId) || [newItem];
+
+        const latestItems = latestItemsByStackRef.current.get(targetId) || [];
         await api.patch(
           `/api/v1/members/${encodeURIComponent(memberSnapshot)}/stacks/${encodeURIComponent(targetId)}`,
-          { items: nextItems },
+          { items: latestItems },
         );
         setSelectedStackId(targetId);
         setStatusMsg(`Added “${compound.name}” to stack.`);
@@ -315,38 +326,55 @@ export function StackBuilderView({
         doseAmount,
         unit: doseUnit,
         doseUnit,
+        route: cmp?.dosages?.route || 'Oral',
         slot: slotId,
-        takenAt: new Date().toISOString(),
-        skipped: false,
+        status: 'taken',
+        dateKey: dkToday('UTC'),
       });
-      setStatusMsg(`Logged ${doseAmount} ${doseUnit} ${item.name}.`);
+      setLoggedIds((prev) => new Set([...prev, item.compoundId]));
+      setStatusMsg(`Logged ${item.name} (${doseAmount} ${doseUnit}).`);
       await onRefresh();
     } catch (err) {
       setErrorMsg(err.message || 'Could not log dose.');
     }
   };
 
-  const interactions = spread?.interactions || {};
-  const hardStops = interactions.hardStops || [];
-  const autoSeparated = interactions.autoSeparated || [];
-  const alternateDayPairs = interactions.alternateDayPairs || [];
-  const ulWarnings = interactions.ulWarnings || [];
-  const safetyAlerts = interactions.safetyAlerts || [];
-  const cautions = interactions.cautions || [];
-  const synergies = interactions.synergies || [];
+  const slots = spread?.systemic?.slots || SYSTEMIC_SLOTS.map((s) => ({
+    slotId: s.id,
+    label: s.label,
+    suggestedTime: s.defaultTime,
+    items: [],
+  }));
+  const populatedSlots = slots.filter((s) => (s.items || []).length > 0);
+  const emptySlots = slots.filter((s) => (s.items || []).length === 0);
+
+  const dermAm = spread?.dermatology?.skin?.am || [];
+  const dermPmNights = spread?.dermatology?.skin?.pmNights || [];
+  const hairScalp = spread?.dermatology?.hairScalp || {};
+  const hairScalpCount = ['am', 'pm', 'weekly'].reduce((sum, k) => sum + (hairScalp[k]?.length || 0), 0);
   const missingSpf = spread?.dermatology?.skin?.missingSpfWarning || null;
-  const microneedlingNotes = spread?.dermatology?.skin?.microneedlingBufferNotes || [];
-  const slots = spread?.systemic?.slots || SYSTEMIC_SLOTS.map((s) => ({ slotId: s.id, label: s.label, suggestedTime: '—', items: [] }));
+  const microNotes = spread?.dermatology?.skin?.microneedlingBufferNotes || [];
+
+  const hardStops = spread?.interactions?.hardStops || [];
+  const autoSeparated = spread?.interactions?.autoSeparated || [];
+  const alternateDayPairs = spread?.interactions?.alternateDayPairs || [];
+  const ulWarnings = spread?.interactions?.ulWarnings || [];
+  const cautions = spread?.interactions?.cautions || [];
+  const synergies = spread?.interactions?.synergies || [];
+  const safetyAlerts = spread?.safetyAlerts || [];
+  const missingStock = spread?.stockSummary?.missing || [];
+
+  const alertCount = hardStops.length + autoSeparated.length + ulWarnings.length + (missingSpf ? 1 : 0);
 
   return (
     <div className="stack-v">
-      {/* Header */}
-      <div className="space-between" style={{ alignItems: 'flex-end' }}>
+      {/* Editorial Header */}
+      <div className="space-between" style={{ alignItems: 'flex-end', paddingTop: '0.2rem' }}>
         <div>
-          <div className="eyebrow">{activeMember?.name || 'MEMBER'} PROTOCOL</div>
-          <h1 className="display-title" style={{ marginTop: 4 }}>Stack &amp; Smart Schedule</h1>
-          <p className="muted" style={{ margin: '0.25rem 0 0' }}>
-            Automatically arranges your peptides, PEDs, vitamins, and skincare around timing, food state, and interactions.
+          <div className="eyebrow">DAILY RHYTHM · {activeMember?.name || activeMemberId}</div>
+          <h1 className="editorial-title" style={{ marginTop: 6 }}>Daily Stack</h1>
+          <p className="italic-sub" style={{ margin: '0.3rem 0 0' }}>
+            Conflict-aware systemic timing, skincare layering, and live adherence.
           </p>
         </div>
 
@@ -356,160 +384,152 @@ export function StackBuilderView({
           data-testid="btn-new-stack"
           onClick={() => setShowNewStack(true)}
         >
-          <Plus size={14} /> New Stack
+          <Plus size={14} strokeWidth={2} /> New Stack
         </button>
       </div>
 
-      {/* Sleek Control Bar */}
-      <div className="card space-between">
-        <div className="row-wrap">
+      {/* Sleek Controls Strip */}
+      <div className="space-between" style={{ gap: '0.6rem' }}>
+        <div className="select-pill" style={{ minWidth: 220 }}>
           <select
             data-testid="stack-selector"
-            aria-label="Select stack"
+            aria-label="Select active stack"
             value={activeStack?.id || ''}
             onChange={(e) => setSelectedStackId(e.target.value)}
-            style={{ minWidth: 200, fontWeight: 600 }}
+            style={{ width: '100%' }}
           >
             {memberStacks.length === 0 ? (
-              <option value="">No stacks yet — tap + New Stack</option>
+              <option value="">No stack yet — create one</option>
             ) : (
               memberStacks.map((st) => (
                 <option key={st.id} value={st.id}>
-                  {st.name} ({(st.items || []).length})
+                  {st.name} ({(st.items || []).length} items)
                 </option>
               ))
             )}
           </select>
-
-          {spread?.stockSummary ? (
-            <span className="pill pill-accent num">
-              {spread.stockSummary.have}/{spread.stockSummary.total} in cabinet
-            </span>
-          ) : null}
+          <ChevronDown size={12} strokeWidth={1.8} className="sel-chev" aria-hidden="true" />
         </div>
 
         <div className="row-wrap">
-          <label className={`toggle-chip${haveOnly ? ' active' : ''}`} data-testid="stack-toggle-have-only">
+          <label className={`toggle-chip${haveOnly ? ' active' : ''}`}>
             <input
               type="checkbox"
+              data-testid="stack-toggle-have-only"
               checked={haveOnly}
               onChange={(e) => handleToggleHaveOnly(e.target.checked)}
             />
-            <span>In Stock Only</span>
+            <span>In Cabinet Only</span>
           </label>
 
-          <label className={`toggle-chip${whatIfEnabled ? ' active' : ''}`} data-testid="what-if-toggle">
+          <label className={`toggle-chip${whatIfEnabled ? ' active' : ''}`}>
             <input
               type="checkbox"
+              data-testid="what-if-toggle"
               checked={whatIfEnabled}
               onChange={(e) => {
                 setWhatIfEnabled(e.target.checked);
                 if (!e.target.checked) setWhatIfIds([]);
               }}
             />
-            <FlaskConical size={13} />
+            <FlaskConical size={12} strokeWidth={1.8} />
             <span>What-If Preview</span>
           </label>
         </div>
       </div>
 
       {whatIfEnabled ? (
-        <div className="banner-warn space-between" role="status">
-          <span>
-            <strong>What-If Preview Active</strong> — test adding wishlist items below without changing your saved stack ({whatIfIds.length} previewing).
-          </span>
+        <div className="banner-warn space-between">
+          <div>
+            <strong>What-If Preview Active</strong> — previewing {whatIfIds.length} candidate(s) without saving changes.
+          </div>
           {whatIfIds.length > 0 ? (
-            <button type="button" className="btn btn-sm" onClick={() => setWhatIfIds([])}>
-              Clear Preview
-            </button>
+            <button type="button" className="btn btn-sm" onClick={() => setWhatIfIds([])}>Clear</button>
           ) : null}
         </div>
       ) : null}
 
       {statusMsg ? (
-        <div className="banner-ok" role="status">
-          {statusMsg}
-        </div>
+        <div className="banner-ok" role="status">{statusMsg}</div>
       ) : null}
 
       {errorMsg ? (
-        <div className="banner-danger" role="alert">
-          {errorMsg}
+        <div className="banner-danger" role="alert">{errorMsg}</div>
+      ) : null}
+
+      {/* Non-Hideable Hard-Stop Safety Banner */}
+      {hardStops.length > 0 ? (
+        <div className="banner-danger stack-sm" data-testid="hard-stop-banner" role="alert">
+          <div className="row-wrap">
+            <AlertOctagon size={17} strokeWidth={2} />
+            <strong>Safety Alert — {hardStops.length} Hard-Stop Interaction(s)</strong>
+          </div>
+          {hardStops.map((hs, idx) => (
+            <div key={hs.id || idx} style={{ fontSize: '0.84rem' }}>
+              <strong>{hs.code || 'Hard Stop'}:</strong> {hs.mechanism} {hs.recommendation}
+            </div>
+          ))}
         </div>
       ) : null}
 
-      {/* NON-HIDEABLE HARD-STOP SAFETY BANNER */}
-      {hardStops.length > 0 ? (
-        <section className="banner-danger stack-sm" data-testid="hard-stop-banner" role="alert">
-          <div className="row-wrap">
-            <AlertOctagon size={18} />
-            <strong>Safety Hard-Stop ({hardStops.length}) — Review Before Combining</strong>
-          </div>
-          {hardStops.map((hs, idx) => (
-            <div key={hs.id || idx} style={{ fontSize: '0.88rem' }}>
-              <strong>{hs.compoundName || (hs.compounds || []).map((c) => c.name).join(' + ')}:</strong>{' '}
-              {hs.mechanism} — <em>{hs.recommendation}</em>
-            </div>
-          ))}
-        </section>
-      ) : null}
-
-      {/* Interactions & Optimization Summary */}
-      <section className="card stack-sm" data-testid="interaction-alerts">
+      {/* Safety & Synergy Intelligence Summary */}
+      <section className="atelier-card stack-sm" data-testid="interaction-alerts">
         <div className="space-between">
-          <div className="row-wrap">
-            <AlertTriangle size={15} color="var(--accent)" />
-            <h2 className="section-heading">Interactions &amp; Smart Spacing</h2>
-          </div>
-          {loadingSpread ? <span className="dim">Recalculating…</span> : null}
+          <div className="eyebrow">SAFETY &amp; INTERACTION INTELLIGENCE</div>
+          <span className={`pill mono ${hardStops.length > 0 ? 'pill-danger' : alertCount > 0 ? 'pill-ai_draft' : 'pill-verified'}`}>
+            {hardStops.length > 0
+              ? `${hardStops.length} hard stop`
+              : alertCount > 0
+                ? `${alertCount} notice${alertCount === 1 ? '' : 's'}`
+                : 'All clear'}
+          </span>
         </div>
 
         {hardStops.map((hs, idx) => (
-          <div key={hs.id || `hs-${idx}`} className="banner-danger" style={{ fontSize: '0.84rem' }}>
-            <strong>Hard-Stop ({hs.compoundName || (hs.compounds || []).map((c) => c.name).join(' + ')}):</strong>{' '}
-            {hs.mechanism} — <em>{hs.recommendation}</em>
+          <div key={hs.id || `hs-${idx}`} className="banner-danger" style={{ fontSize: '0.83rem' }}>
+            <strong>Hard Stop ({hs.code || 'Contraindicated'}):</strong> {hs.mechanism} {hs.recommendation}
           </div>
         ))}
 
         {missingSpf ? (
-          <div className="banner-warn" style={{ fontSize: '0.84rem' }}>
+          <div className="banner-warn" style={{ fontSize: '0.83rem' }}>
             <strong>Missing SPF:</strong> {missingSpf}
           </div>
         ) : null}
 
         {autoSeparated.map((sep, idx) => (
-          <div key={sep.id || idx} className="banner-ok" style={{ fontSize: '0.84rem' }}>
+          <div key={sep.id || idx} className="banner-ok" style={{ fontSize: '0.83rem' }}>
             <strong>Auto-Separated:</strong>{' '}
             {(sep.compounds || []).map((c) => `${c.name} (${c.slotId.replace(/_/g, ' ')})`).join(' vs ')} — {sep.recommendation || sep.mechanism}
           </div>
         ))}
 
         {alternateDayPairs.map((alt, idx) => (
-          <div key={alt.id || idx} className="banner-warn" style={{ fontSize: '0.84rem' }}>
+          <div key={alt.id || idx} className="banner-warn" style={{ fontSize: '0.83rem' }}>
             <strong>Alternating Nights/Days:</strong> {alt.recommendation || alt.mechanism}
           </div>
         ))}
 
         {ulWarnings.map((ul, idx) => (
-          <div key={ul.nutrientKey || idx} className="banner-warn" style={{ fontSize: '0.84rem' }}>
+          <div key={ul.nutrientKey || idx} className="banner-warn" style={{ fontSize: '0.83rem' }}>
             <strong>Upper Limit ({ul.nutrient}):</strong> {ul.totalAmount} {ul.unit} &gt; {ul.upperLimit} {ul.unit} — {ul.recommendation}
           </div>
         ))}
 
         {safetyAlerts.filter((a) => a.severity !== 'hard_stop').map((al, idx) => (
-          <div key={al.id || idx} className="banner-warn" style={{ fontSize: '0.84rem' }}>
+          <div key={al.id || idx} className="banner-warn" style={{ fontSize: '0.83rem' }}>
             <strong>Safety Note ({al.compoundName}):</strong> {al.mechanism}
           </div>
         ))}
 
         {cautions.map((c, idx) => (
-          <div key={c.id || idx} className="muted" style={{ fontSize: '0.84rem' }}>
-            • <strong>Caution:</strong> {c.mechanism}
+          <div key={c.id || idx} className="muted" style={{ fontSize: '0.83rem' }}>
+            • <strong style={{ color: 'var(--ink)' }}>Caution:</strong> {c.mechanism}
           </div>
         ))}
 
         {synergies.map((s, idx) => (
-          <div key={s.id || idx} style={{ fontSize: '0.84rem', color: 'var(--success)' }}>
+          <div key={s.id || idx} style={{ fontSize: '0.83rem', color: 'var(--success)' }}>
             ✦ <strong>Synergy:</strong> {(s.compounds || []).map((c) => c.name).join(' + ')} — {s.reason}
           </div>
         ))}
@@ -522,260 +542,295 @@ export function StackBuilderView({
         synergies.length === 0 &&
         !missingSpf ? (
           <p className="muted" style={{ margin: 0 }}>
-            All clear — no conflicts detected. Add compounds below to generate your smart daily spread.
+            No conflicts detected. Add compounds below to automatically arrange your daily timing windows.
           </p>
         ) : null}
       </section>
 
-      {/* DUAL-TRACK SCHEDULE HERO */}
-      <div className="grid-2" style={{ alignItems: 'start' }}>
-        {/* Left: Systemic 8-Slot Timeline */}
-        <section className="card stack-sm" data-testid="spread-systemic-timeline">
-          <div className="space-between">
-            <div>
-              <div className="eyebrow">SYSTEMIC TRACK</div>
-              <h2 className="section-heading">Daily Schedule</h2>
+      {/* SYSTEMIC TRACK — Protocol OS `.blk` Daily Rhythm Blocks */}
+      <section className="stack-sm" data-testid="spread-systemic-timeline">
+        <div className="section-h">
+          <span>Systemic Schedule</span>
+          <span className="sh-count">{loadingSpread ? 'syncing…' : `${populatedSlots.length} / 8 active`}</span>
+        </div>
+
+        {populatedSlots.map((slot) => (
+          <div key={slot.slotId} className="blk" data-testid={`spread-slot-${slot.slotId}`}>
+            <div className="blk-hd">
+              <span className="blk-title">{slot.label}</span>
+              <span className="blk-time">{slot.suggestedTime}</span>
             </div>
-            <span className="pill num">8 timing windows</span>
-          </div>
 
-          {slots.map((slot) => {
-            const hasItems = (slot.items || []).length > 0;
-            return (
-              <div
-                key={slot.slotId}
-                className={`slot-card ${hasItems ? 'slot-populated' : 'slot-empty'}`}
-                data-testid={`spread-slot-${slot.slotId}`}
-              >
-                <div className="space-between">
-                  <strong style={{ fontSize: hasItems ? '0.92rem' : '0.8rem' }}>{slot.label}</strong>
-                  <span className={`pill num ${hasItems ? 'pill-accent' : ''}`}>{slot.suggestedTime}</span>
-                </div>
+            {slot.items.map((item) => {
+              const isLogged = loggedIds.has(item.compoundId);
+              return (
+                <article key={item.stackItemId || item.compoundId} className="blk-row">
+                  <button
+                    type="button"
+                    className={`blk-disc${isLogged ? ' logged' : ''}`}
+                    aria-label={`Quick log ${item.name}`}
+                    onClick={() => handleLogDose(item, slot.slotId)}
+                  >
+                    {isLogged ? <Check size={14} strokeWidth={2.4} /> : <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor' }} />}
+                  </button>
 
-                {hasItems
-                  ? slot.items.map((item) => (
-                      <article key={item.stackItemId || item.compoundId} className="slot-item stack-sm">
-                        <div className="space-between">
-                          <div className="row-wrap">
-                            <strong style={{ fontSize: '0.94rem' }}>{item.name}</strong>
-                            {item.doseDisplay ? <span className="pill pill-accent num">{item.doseDisplay}</span> : null}
-                            <span className={`pill pill-${item.ownershipStatus}`}>{item.ownershipStatus.replace(/_/g, ' ')}</span>
-                            {item.isWhatIf ? <span className="pill pill-wishlist">What-If</span> : null}
-                            {item.pinned ? <span className="pill pill-verified">Pinned</span> : null}
-                          </div>
-
-                          <div className="row-wrap">
-                            <button
-                              type="button"
-                              className="btn btn-sm"
-                              data-testid={`btn-pin-override-${item.compoundId}`}
-                              onClick={() => {
-                                setPinEditingItem({
-                                  compoundId: item.compoundId,
-                                  name: item.name,
-                                  pinned: Boolean(item.pinned),
-                                  initialSlot: slot.slotId,
-                                });
-                                setPinDraftSlot(slot.slotId);
-                              }}
-                            >
-                              <Pin size={12} /> {item.pinned ? 'Pinned' : 'Pin'}
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-primary"
-                              data-testid={`btn-log-dose-${item.compoundId}`}
-                              onClick={() => handleLogDose(item, slot.slotId)}
-                            >
-                              <CheckCircle2 size={12} /> Log
-                            </button>
-                          </div>
-                        </div>
-
-                        {item.pinConflictWarning ? (
-                          <div className="banner-warn" style={{ fontSize: '0.78rem', padding: '0.4rem 0.65rem' }}>
-                            {item.pinConflictWarning}
-                          </div>
-                        ) : null}
-
-                        {(item.rationale || []).length > 0 ? (
-                          <div className="row-wrap">
-                            {item.rationale.map((r, i) => (
-                              <span key={i} className="pill" style={{ fontSize: '0.7rem' }}>
-                                <Sparkles size={9} /> {r}
-                              </span>
-                            ))}
-                          </div>
-                        ) : null}
-                      </article>
-                    ))
-                  : null}
-              </div>
-            );
-          })}
-        </section>
-
-        {/* Right: Dermatology AM/PM + Skin Cycling + Hair/Scalp */}
-        <div className="stack-v">
-          <section className="card stack-sm" data-testid="spread-derm-am">
-            <div className="space-between">
-              <div className="row-wrap">
-                <Sun size={16} color="var(--accent)" />
-                <div>
-                  <div className="eyebrow">MORNING SKINCARE</div>
-                  <h2 className="section-heading">AM Layering (Steps 1–7)</h2>
-                </div>
-              </div>
-            </div>
-            {(spread?.dermatology?.skin?.am || []).length === 0 ? (
-              <p className="muted" style={{ margin: 0 }}>No morning skincare steps in this stack yet.</p>
-            ) : (
-              spread.dermatology.skin.am.map((st, idx) => (
-                <div key={st.compoundId || idx} className="card-subtle space-between">
-                  <div>
-                    <span className="pill pill-accent num" style={{ marginRight: 6 }}>Step {st.step}</span>
-                    <strong>{st.name}</strong>
-                  </div>
-                  <span className="pill">
-                    {(st.vehicleType || '').replace(/_/g, ' ')}
-                    {st.waitTimeMinutes > 0 ? ` · wait ${st.waitTimeMinutes}m` : ''}
-                  </span>
-                </div>
-              ))
-            )}
-          </section>
-
-          <section className="card stack-sm" data-testid="spread-derm-pm">
-            <div className="row-wrap">
-              <Moon size={16} color="var(--accent)" />
-              <div>
-                <div className="eyebrow">EVENING SKINCARE</div>
-                <h2 className="section-heading">PM Skin-Cycling Nights</h2>
-              </div>
-            </div>
-            {(spread?.dermatology?.skin?.pmNights || []).length === 0 ? (
-              <p className="muted" style={{ margin: 0 }}>No evening skincare actives in this stack yet.</p>
-            ) : (
-              spread.dermatology.skin.pmNights.map((night, idx) => (
-                <div key={idx} className="slot-card slot-populated stack-sm">
-                  <div className="space-between">
-                    <strong>{night.nightLabel}</strong>
-                    <span className="pill pill-accent">{night.theme}</span>
-                  </div>
-                  {(night.steps || []).map((st, sIdx) => (
-                    <div key={st.compoundId || sIdx} className="space-between" style={{ fontSize: '0.86rem' }}>
-                      <span>
-                        <span className="num" style={{ color: 'var(--accent)', marginRight: 6 }}>{st.step}.</span>
-                        {st.name}
-                      </span>
-                      <span className="dim">
-                        {st.waitTimeMinutes > 0 ? `Wait ${st.waitTimeMinutes}m` : (st.vehicleType || '').replace(/_/g, ' ')}
-                      </span>
+                  <div className="row-body">
+                    <div className="row-wrap" style={{ gap: '0.4rem' }}>
+                      <span className="row-title">{item.name}</span>
+                      {item.pinned ? <span className="pill pill-accent">Pinned</span> : null}
+                      {item.isWhatIf ? <span className="pill pill-wishlist">What-If</span> : null}
                     </div>
-                  ))}
-                </div>
-              ))
-            )}
-            {microneedlingNotes.map((note, idx) => (
-              <div key={idx} className="banner-warn" style={{ fontSize: '0.82rem' }}>
-                <strong>Microneedling Buffer:</strong> {note}
+                    <div className="row-meta">
+                      {[
+                        item.doseDisplay,
+                        item.ownershipStatus ? item.ownershipStatus.replace(/_/g, ' ') : '',
+                        ...(item.rationale || []).slice(0, 1),
+                      ]
+                        .filter(Boolean)
+                        .join('  ·  ')}
+                    </div>
+                    {item.pinConflictWarning ? (
+                      <div className="dim" style={{ color: 'var(--warn)', marginTop: 2 }}>
+                        {item.pinConflictWarning}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="row-wrap" style={{ flexShrink: 0, gap: '0.35rem' }}>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      data-testid={`btn-pin-override-${item.compoundId}`}
+                      onClick={() => {
+                        setPinEditingItem({
+                          compoundId: item.compoundId,
+                          name: item.name,
+                          pinned: Boolean(item.pinned),
+                          initialSlot: slot.slotId,
+                        });
+                        setPinDraftSlot(slot.slotId);
+                      }}
+                    >
+                      <Pin size={12} strokeWidth={1.8} /> {item.pinned ? 'Pinned' : 'Pin'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      data-testid={`btn-log-dose-${item.compoundId}`}
+                      onClick={() => handleLogDose(item, slot.slotId)}
+                    >
+                      Log
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        ))}
+
+        {/* Quiet compact empty timing index so all 8 canonical slots remain in DOM without visual clutter */}
+        {emptySlots.length > 0 ? (
+          <div className="slot-empty-strip" style={{ paddingTop: '0.2rem' }}>
+            {emptySlots.map((slot) => (
+              <div key={slot.slotId} className="slot-empty-chip" data-testid={`spread-slot-${slot.slotId}`}>
+                <span>{slot.label}</span>
+                <span className="mono">{slot.suggestedTime}</span>
               </div>
             ))}
-          </section>
+          </div>
+        ) : null}
+      </section>
 
-          <section className="card stack-sm" data-testid="spread-hair-scalp">
-            <div className="row-wrap">
-              <Scissors size={15} color="var(--accent)" />
-              <div>
-                <div className="eyebrow">SCALP &amp; HAIR</div>
-                <h2 className="section-heading">Hair Routine</h2>
+      {/* DERMATOLOGY TRACK — AM / PM / Hair Ritual Sheets */}
+      <section className="stack-sm">
+        <div className="section-h">
+          <span>Skin &amp; Hair Ritual</span>
+          <span className="sh-count">AM · PM · Scalp</span>
+        </div>
+
+        <div className="grid-2" style={{ alignItems: 'start' }}>
+          {/* AM Facial Layering */}
+          <div className="atelier-card stack-sm" data-testid="spread-derm-am">
+            <div className="space-between">
+              <div className="row-wrap" style={{ gap: '0.45rem' }}>
+                <Sun size={15} strokeWidth={1.8} color="var(--accent)" />
+                <h3 className="section-heading">Morning Layering</h3>
               </div>
+              <span className="dim mono">Steps 1–7</span>
             </div>
-            {['am', 'pm', 'weekly'].every((k) => (spread?.dermatology?.hairScalp?.[k] || []).length === 0) ? (
-              <p className="muted" style={{ margin: 0 }}>No scalp or hair treatments in this stack yet.</p>
+
+            {dermAm.length === 0 ? (
+              <p className="dim" style={{ margin: 0 }}>No morning skincare actives in this stack.</p>
             ) : (
-              ['am', 'pm', 'weekly'].map((bucket) => {
-                const list = spread?.dermatology?.hairScalp?.[bucket] || [];
+              <div>
+                {dermAm.map((st, idx) => (
+                  <div key={st.compoundId || idx} className="ritual-step">
+                    <span className="step-num">0{st.step || idx + 1}</span>
+                    <div className="row-body">
+                      <div className="row-title" style={{ fontSize: '0.9rem' }}>{st.name}</div>
+                      <div className="row-meta">
+                        {(st.vehicleType || 'Topical').replace(/_/g, ' ')}
+                        {st.waitTimeMinutes > 0 ? `  ·  wait ${st.waitTimeMinutes}m` : ''}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* PM Skin Cycling */}
+          <div className="atelier-card stack-sm" data-testid="spread-derm-pm">
+            <div className="space-between">
+              <div className="row-wrap" style={{ gap: '0.45rem' }}>
+                <Moon size={15} strokeWidth={1.8} color="var(--accent)" />
+                <h3 className="section-heading">Evening Skin Cycling</h3>
+              </div>
+              <span className="dim mono">{dermPmNights.length ? `${dermPmNights.length} nights` : 'Tonight'}</span>
+            </div>
+
+            {dermPmNights.length === 0 ? (
+              <p className="dim" style={{ margin: 0 }}>No evening skincare actives scheduled.</p>
+            ) : (
+              <div className="stack-sm">
+                {dermPmNights.map((night, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      paddingTop: idx ? '0.65rem' : 0,
+                      borderTop: idx ? '1px solid var(--hair-subtle)' : 'none',
+                    }}
+                    className="stack-sm"
+                  >
+                    <div className="space-between">
+                      <strong style={{ fontSize: '0.86rem' }}>{night.nightLabel}</strong>
+                      <span className="pill pill-accent">{night.theme}</span>
+                    </div>
+                    {(night.steps || []).map((st, sIdx) => (
+                      <div key={st.compoundId || sIdx} className="ritual-step" style={{ padding: '0.42rem 0' }}>
+                        <span className="step-num">0{st.step || sIdx + 1}</span>
+                        <div className="row-body">
+                          <div className="row-title" style={{ fontSize: '0.88rem' }}>{st.name}</div>
+                          <div className="row-meta">
+                            {(st.vehicleType || 'Topical').replace(/_/g, ' ')}
+                            {st.waitTimeMinutes > 0 ? `  ·  wait ${st.waitTimeMinutes}m` : ''}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {microNotes.map((mn, i) => (
+              <div key={i} className="banner-warn" style={{ fontSize: '0.78rem', padding: '0.5rem 0.7rem' }}>
+                <strong>Microneedling Buffer:</strong> {mn}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Hair & Scalp Track */}
+        <div className="atelier-card stack-sm" data-testid="spread-hair-scalp">
+          <div className="space-between">
+            <div className="row-wrap" style={{ gap: '0.45rem' }}>
+              <Scissors size={14} strokeWidth={1.8} color="var(--accent)" />
+              <h3 className="section-heading">Hair &amp; Scalp Protocol</h3>
+            </div>
+            <span className="dim mono">{hairScalpCount} items</span>
+          </div>
+          {hairScalpCount === 0 ? (
+            <p className="dim" style={{ margin: 0 }}>No hair or scalp treatments in this stack.</p>
+          ) : (
+            <div className="stack-sm">
+              {['am', 'pm', 'weekly'].map((bucket) => {
+                const list = hairScalp[bucket] || [];
                 if (list.length === 0) return null;
                 return (
                   <div key={bucket} className="stack-sm">
                     <div className="eyebrow">{bucket}</div>
-                    {list.map((st, idx) => (
-                      <div key={st.compoundId || idx} className="card-subtle space-between">
-                        <strong>{st.name}</strong>
-                        <span className="pill">{(st.vehicleType || '').replace(/_/g, ' ')}</span>
+                    {list.map((item, idx) => (
+                      <div
+                        key={item.compoundId || idx}
+                        className="space-between"
+                        style={{ paddingTop: idx ? '0.42rem' : 0, borderTop: idx ? '1px solid var(--hair-subtle)' : 'none' }}
+                      >
+                        <strong style={{ fontSize: '0.9rem' }}>{item.name}</strong>
+                        <span className="row-meta">{(item.vehicleType || 'Scalp').replace(/_/g, ' ')}</span>
                       </div>
                     ))}
                   </div>
                 );
-              })
-            )}
-          </section>
+              })}
+            </div>
+          )}
         </div>
-      </div>
 
-      {/* Clean Searchable Cross-Section Compound Picker */}
-      <section className="card stack-v" data-testid="stack-compound-picker">
-        <div className="space-between">
-          <div>
-            <div className="eyebrow">{whatIfEnabled ? 'WHAT-IF SIMULATOR' : 'BUILD YOUR STACK'}</div>
-            <h2 className="section-heading">
-              {whatIfEnabled ? 'Pick Wishlist Compounds to Preview' : 'Choose Compounds Across All Sections'}
-            </h2>
+        {missingStock.length > 0 ? (
+          <div className="banner-warn" style={{ fontSize: '0.83rem' }}>
+            <strong>Needed for this stack:</strong> {missingStock.map((m) => m.name).join(', ')}
+          </div>
+        ) : null}
+      </section>
+
+      {/* COMPOUND PICKER — Clean Grouped Porcelain Sheet */}
+      <section className="stack-sm" data-testid="stack-compound-picker">
+        <div className="section-h">
+          <span>{whatIfEnabled ? 'Preview Additional Compounds' : 'Add to Stack'}</span>
+          <span className="sh-count">{effectiveItems.length} in stack</span>
+        </div>
+
+        <div className="space-between" style={{ gap: '0.6rem' }}>
+          <div className="cat-pills">
+            {PICKER_SECTIONS.map((ps) => (
+              <button
+                key={ps.id}
+                type="button"
+                className={`cat-pill${pickerSection === ps.id ? ' active' : ''}`}
+                style={{ padding: '0.38rem 0.78rem', fontSize: '0.76rem' }}
+                onClick={() => setPickerSection(ps.id)}
+              >
+                {ps.label}
+              </button>
+            ))}
           </div>
 
-          <div className="search-wrap" style={{ maxWidth: 240 }}>
-            <Search size={13} className="search-icon" aria-hidden="true" />
+          <div className="search-wrap" style={{ maxWidth: 210 }}>
+            <Search size={13} strokeWidth={1.8} className="search-icon" aria-hidden="true" />
             <input
               type="text"
               placeholder="Filter compounds…"
-              aria-label="Filter compounds to add to stack"
               value={pickerQuery}
               onChange={(e) => setPickerQuery(e.target.value)}
             />
           </div>
         </div>
 
-        <div className="section-tabs">
-          {PICKER_SECTIONS.map((ps) => (
-            <button
-              key={ps.id}
-              type="button"
-              className={`tab-btn${pickerSection === ps.id ? ' active' : ''}`}
-              onClick={() => setPickerSection(ps.id)}
-            >
-              {ps.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="grid-2">
+        <div className="list-sheet" style={{ maxHeight: 360, overflowY: 'auto' }}>
           {visiblePickerCompounds.map((cmp) => {
             const inStack = stackItemIds.has(cmp.id);
             const inWhatIf = whatIfIds.includes(cmp.id);
             return (
-              <div key={cmp.id} className="card-subtle space-between">
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{cmp.name}</div>
-                  <div className="dim">
-                    {cmp.sectionId.replace(/_/g, ' ')}
-                    {cmp.dosages?.rangeText ? ` · ${cmp.dosages.rangeText}` : ''}
+              <div key={cmp.id} className="list-row" style={{ padding: '0.72rem 1.15rem' }}>
+                <div className="row-body">
+                  <div className="row-title" style={{ fontSize: '0.9rem' }}>{cmp.name}</div>
+                  <div className="row-meta">
+                    {[cmp.sectionId.replace(/_/g, ' '), cmp.dosages?.route].filter(Boolean).join('  ·  ')}
                   </div>
                 </div>
-
                 {inStack && !whatIfEnabled ? (
                   <button
                     type="button"
-                    className="btn btn-sm btn-success"
+                    className="btn btn-success btn-sm"
                     onClick={() => handleRemoveFromStack(cmp.id)}
-                    title="Click to remove from stack"
                   >
-                    <Check size={13} /> In Stack
+                    <Check size={12} strokeWidth={2.2} /> Added
                   </button>
                 ) : (
                   <button
                     type="button"
-                    className="btn btn-sm btn-primary"
+                    className="btn btn-primary btn-sm"
                     data-testid={`btn-add-to-stack-${cmp.id}`}
                     onClick={() => handleAddCompound(cmp)}
                     disabled={whatIfEnabled && inWhatIf}
@@ -801,7 +856,7 @@ export function StackBuilderView({
             <div className="space-between">
               <div>
                 <div className="eyebrow">TIMING OVERRIDE</div>
-                <h2 className="display-sm">Pin {pinEditingItem.name}</h2>
+                <h2 className="display-sm" style={{ marginTop: 2 }}>Pin {pinEditingItem.name}</h2>
               </div>
               <button type="button" className="btn btn-sm" onClick={() => setPinEditingItem(null)}>
                 Close
@@ -855,7 +910,7 @@ export function StackBuilderView({
             <div className="space-between">
               <div>
                 <div className="eyebrow">NEW PROTOCOL</div>
-                <h2 className="display-sm">Create Stack</h2>
+                <h2 className="display-sm" style={{ marginTop: 2 }}>Create Stack</h2>
               </div>
               <button type="button" className="btn btn-sm" onClick={() => setShowNewStack(false)}>
                 Close

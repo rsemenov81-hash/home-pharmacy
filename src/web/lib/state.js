@@ -4,7 +4,7 @@
  */
 
 const CACHE_KEY = 'hp_offline_cache_v1';
-const THEME_KEY = 'hp_theme_v1';
+const THEME_KEY = 'hp_theme_v2';
 const PIN_CONFIG_KEY = 'hp_device_pin_v1';
 const PIN_STATE_KEY = 'hp_device_pin_lock_state_v1';
 
@@ -30,11 +30,11 @@ export function loadTheme() {
   } catch {
     // ignore
   }
-  return 'dark';
+  return 'light';
 }
 
 export function saveTheme(theme) {
-  const t = theme === 'light' ? 'light' : 'dark';
+  const t = theme === 'dark' ? 'dark' : 'light';
   try {
     window.localStorage.setItem(THEME_KEY, t);
   } catch {
@@ -43,7 +43,7 @@ export function saveTheme(theme) {
   if (typeof document !== 'undefined') {
     document.documentElement.setAttribute('data-theme', t);
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', t === 'light' ? '#f3f1ea' : '#0c221b');
+    if (meta) meta.setAttribute('content', t === 'dark' ? '#0a0b0d' : '#f4f1ea');
   }
   return t;
 }

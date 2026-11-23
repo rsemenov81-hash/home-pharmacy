@@ -2,14 +2,14 @@ import React, { useMemo, useState } from 'react';
 import {
   Plus,
   SlidersHorizontal,
-  CheckCircle2,
   Sparkles,
   Syringe,
   Flame,
-  Pill,
+  Leaf,
   Droplets,
   Layers,
-  Clock,
+  ChevronRight,
+  ChevronDown,
 } from 'lucide-react';
 import {
   resolveEffectiveOwnership,
@@ -20,18 +20,37 @@ import {
 import { api } from '../lib/api.js';
 
 const SECTION_META = {
-  peptides: { short: 'Peptides', Icon: Syringe },
-  peds: { short: 'PEDs', Icon: Flame },
-  vitamins_supplements: { short: 'Vitamins', Icon: Pill },
-  dermatology: { short: 'Dermatology', Icon: Droplets },
+  peptides: {
+    short: 'Peptides',
+    editorial: 'Peptides',
+    Icon: Syringe,
+    cls: 'sec-peptides',
+  },
+  peds: {
+    short: 'PEDs',
+    editorial: 'Performance',
+    Icon: Flame,
+    cls: 'sec-peds',
+  },
+  vitamins_supplements: {
+    short: 'Vitamins',
+    editorial: 'Vitamins & Minerals',
+    Icon: Leaf,
+    cls: 'sec-vitamins_supplements',
+  },
+  dermatology: {
+    short: 'Dermatology',
+    editorial: 'Skin & Hair',
+    Icon: Droplets,
+    cls: 'sec-dermatology',
+  },
 };
 
-const OWN_LABEL = {
+const OWN_CUE = {
   have: 'In Cabinet',
-  dont_have: "Don't Have",
   wishlist: 'Wishlist',
   low_stock: 'Low Stock',
-  ordered: 'Ordered',
+  ordered: 'On Order',
 };
 
 function AddCompoundModal({ section, sections, onClose, onCreated }) {
@@ -113,8 +132,8 @@ function AddCompoundModal({ section, sections, onClose, onCreated }) {
       <div className="modal-card stack-v">
         <div className="space-between">
           <div>
-            <div className="eyebrow">NEW PROFILE</div>
-            <h2 className="display-sm">Add Compound</h2>
+            <div className="eyebrow">NEW MONOGRAPH</div>
+            <h2 className="display-sm" style={{ marginTop: 2 }}>Add Compound</h2>
           </div>
           <button type="button" className="btn btn-sm" onClick={onClose}>
             Close
@@ -127,30 +146,24 @@ function AddCompoundModal({ section, sections, onClose, onCreated }) {
           </div>
         ) : null}
 
-        <form onSubmit={handleSubmit} className="stack-v" noValidate>
+        <form onSubmit={handleSubmit} className="stack-v">
           <div className="grid-2">
             <label className="field-label">
               Compound Name *
               <input
                 type="text"
                 name="name"
-                placeholder="e.g., BPC-157, Tretinoin 0.05%"
+                placeholder="e.g., Epitalon, Creatine"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
+                autoFocus
               />
             </label>
+
             <label className="field-label">
-              Section *
-              <select
-                name="sectionId"
-                value={sectionId}
-                onChange={(e) => {
-                  const next = e.target.value;
-                  setSectionId(next);
-                  setRoute(next === 'dermatology' ? 'Topical' : next === 'vitamins_supplements' ? 'Oral' : 'SubQ');
-                }}
-              >
+              Section
+              <select name="sectionId" value={sectionId} onChange={(e) => setSectionId(e.target.value)}>
                 {sections.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
@@ -160,12 +173,36 @@ function AddCompoundModal({ section, sections, onClose, onCreated }) {
             </label>
           </div>
 
+          <div className="grid-2">
+            <label className="field-label">
+              Category / Group
+              <input
+                type="text"
+                name="subsection"
+                placeholder="e.g., Healing & Tissue, Retinoids"
+                value={subsection}
+                onChange={(e) => setSubsection(e.target.value)}
+              />
+            </label>
+
+            <label className="field-label">
+              Route
+              <select name="route" value={route} onChange={(e) => setRoute(e.target.value)}>
+                {CANONICAL_ROUTES.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
           <label className="field-label">
-            What It Is (Summary) *
+            Summary (What It Is) *
             <textarea
               name="summary"
               rows={2}
-              placeholder="Concise overview of this compound and primary purpose…"
+              placeholder="Concise overview of what this compound is and why you use it…"
               value={summary}
               onChange={(e) => setSummary(e.target.value)}
               required
@@ -177,23 +214,13 @@ function AddCompoundModal({ section, sections, onClose, onCreated }) {
             <textarea
               name="mechanismOfAction"
               rows={2}
-              placeholder="Receptors, biological pathway, or topical action…"
+              placeholder="How it works biologically (receptors, pathways)…"
               value={mechanismOfAction}
               onChange={(e) => setMechanismOfAction(e.target.value)}
             />
           </label>
 
           <div className="grid-3">
-            <label className="field-label">
-              Route
-              <select name="route" value={route} onChange={(e) => setRoute(e.target.value)}>
-                {CANONICAL_ROUTES.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
-            </label>
             <label className="field-label">
               Default Dose
               <input
@@ -205,6 +232,7 @@ function AddCompoundModal({ section, sections, onClose, onCreated }) {
                 onChange={(e) => setDefaultAmount(e.target.value)}
               />
             </label>
+
             <label className="field-label">
               Unit
               <select name="defaultUnit" value={defaultUnit} onChange={(e) => setDefaultUnit(e.target.value)}>
@@ -215,11 +243,22 @@ function AddCompoundModal({ section, sections, onClose, onCreated }) {
                 ))}
               </select>
             </label>
+
+            <label className="field-label">
+              Frequency
+              <input
+                type="text"
+                name="frequencyText"
+                placeholder="Daily, 2x/wk"
+                value={frequencyText}
+                onChange={(e) => setFrequencyText(e.target.value)}
+              />
+            </label>
           </div>
 
           <div className="grid-3">
             <label className="field-label">
-              Dosage Range
+              Typical Range
               <input
                 type="text"
                 name="rangeText"
@@ -228,54 +267,33 @@ function AddCompoundModal({ section, sections, onClose, onCreated }) {
                 onChange={(e) => setRangeText(e.target.value)}
               />
             </label>
+
             <label className="field-label">
               Half-Life
               <input
                 type="text"
                 name="halfLife"
-                placeholder="e.g., ~4–6 hours"
+                placeholder="~4 hours"
                 value={halfLifeText}
                 onChange={(e) => setHalfLifeText(e.target.value)}
               />
             </label>
+
             <label className="field-label">
               Cycle Pattern
               <input
                 type="text"
                 name="cycles"
-                placeholder="8 weeks on / 4 off"
+                placeholder="8w on / 4w off"
                 value={cycleText}
                 onChange={(e) => setCycleText(e.target.value)}
               />
             </label>
           </div>
 
-          <div className="grid-2">
-            <label className="field-label">
-              Category / Subsection
-              <input
-                type="text"
-                name="subsection"
-                placeholder="Optional category"
-                value={subsection}
-                onChange={(e) => setSubsection(e.target.value)}
-              />
-            </label>
-            <label className="field-label">
-              Frequency
-              <input
-                type="text"
-                name="frequencyText"
-                placeholder="Daily, 3x/week, AM/PM…"
-                value={frequencyText}
-                onChange={(e) => setFrequencyText(e.target.value)}
-              />
-            </label>
-          </div>
-
           {(selectedSection?.customFields || []).length > 0 ? (
             <div className="card-subtle stack-sm">
-              <div className="eyebrow">CUSTOM SECTION FIELDS</div>
+              <div className="eyebrow">Custom Section Fields</div>
               <div className="grid-2">
                 {selectedSection.customFields.map((cf) => (
                   <label key={cf.key} className="field-label">
@@ -412,7 +430,7 @@ function CustomizeSectionModal({ section, onClose, onSaved }) {
         <div className="space-between">
           <div>
             <div className="eyebrow">SECTION TEMPLATE</div>
-            <h2 className="display-sm">Customize {section.name}</h2>
+            <h2 className="display-sm" style={{ marginTop: 2 }}>Customize {section.name}</h2>
           </div>
           <button type="button" className="btn btn-sm" onClick={onClose}>
             Close
@@ -427,60 +445,66 @@ function CustomizeSectionModal({ section, onClose, onSaved }) {
 
         <form onSubmit={handleSave} className="stack-v">
           <label className="field-label">
-            AI Research Instructions for This Section
+            AI Research Instructions (synced to all 5 AIs)
             <textarea
               name="aiResearchPrompt"
               rows={3}
               value={aiResearchPrompt}
               onChange={(e) => setAiResearchPrompt(e.target.value)}
-              placeholder="Tell your AIs what specific details to fill out for compounds in this section…"
+              placeholder="Custom criteria every AI must research when adding profiles to this section…"
             />
           </label>
 
           <div className="stack-sm">
-            <div className="eyebrow">CUSTOM FIELDS ({customFields.length})</div>
+            <div className="eyebrow">Active Custom Fields ({customFields.length})</div>
             {customFields.length === 0 ? (
               <p className="muted" style={{ margin: 0 }}>
-                No custom fields added yet. Add any extra data you want tracked for this section.
+                No custom fields added yet.
               </p>
             ) : (
-              customFields.map((f) => (
-                <div key={f.key} className="card-subtle space-between">
-                  <div>
-                    <strong>{f.label}</strong>{' '}
-                    <span className="pill num">{f.key}</span>{' '}
-                    <span className="pill">{f.fieldType}</span>
-                    {f.required ? <span className="pill pill-accent" style={{ marginLeft: 4 }}>Required</span> : null}
+              <div className="stack-sm">
+                {customFields.map((cf) => (
+                  <div key={cf.key} className="card-subtle space-between">
+                    <div>
+                      <strong>{cf.label}</strong>{' '}
+                      <span className="pill mono">{cf.key}</span>{' '}
+                      <span className="pill">{cf.fieldType}</span>
+                      {cf.required ? <span className="pill pill-accent">required</span> : null}
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-sm"
+                      onClick={() => handleRemoveField(cf.key)}
+                    >
+                      Remove
+                    </button>
                   </div>
-                  <button type="button" className="btn btn-sm btn-danger" onClick={() => handleRemoveField(f.key)}>
-                    Archive
-                  </button>
-                </div>
-              ))
+                ))}
+              </div>
             )}
           </div>
 
           <div className="card-subtle stack-sm">
-            <div className="eyebrow">ADD FIELD</div>
+            <div className="eyebrow">Add a Custom Field</div>
             <div className="grid-2">
+              <label className="field-label">
+                Field Label
+                <input
+                  type="text"
+                  name="fieldLabel"
+                  placeholder="e.g., COA Batch URL"
+                  value={fieldLabel}
+                  onChange={(e) => setFieldLabel(e.target.value)}
+                />
+              </label>
               <label className="field-label">
                 Field Key
                 <input
                   type="text"
                   name="fieldKey"
-                  placeholder="e.g., batch_number"
+                  placeholder="e.g., coa_url"
                   value={fieldKey}
                   onChange={(e) => setFieldKey(e.target.value)}
-                />
-              </label>
-              <label className="field-label">
-                Display Label
-                <input
-                  type="text"
-                  name="fieldLabel"
-                  placeholder="e.g., Batch Number"
-                  value={fieldLabel}
-                  onChange={(e) => setFieldLabel(e.target.value)}
                 />
               </label>
             </div>
@@ -488,23 +512,26 @@ function CustomizeSectionModal({ section, onClose, onSaved }) {
               <label className="field-label">
                 Type
                 <select name="fieldType" value={fieldType} onChange={(e) => setFieldType(e.target.value)}>
-                  {CUSTOM_FIELD_TYPES.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
+                  {CUSTOM_FIELD_TYPES.map((ft) => (
+                    <option key={ft} value={ft}>
+                      {ft}
                     </option>
                   ))}
                 </select>
               </label>
-              <label className="toggle-chip" style={{ alignSelf: 'end', height: 40 }}>
-                <input
-                  type="checkbox"
-                  checked={fieldRequired}
-                  onChange={(e) => setFieldRequired(e.target.checked)}
-                />
-                <span>Required field</span>
+              <label className="field-label" style={{ justifyContent: 'flex-end' }}>
+                Required
+                <label className="toggle-chip" style={{ marginTop: 2 }}>
+                  <input
+                    type="checkbox"
+                    checked={fieldRequired}
+                    onChange={(e) => setFieldRequired(e.target.checked)}
+                  />
+                  <span>Must be filled</span>
+                </label>
               </label>
             </div>
-            {fieldType === 'select' || fieldType === 'multiselect' ? (
+            {(fieldType === 'select' || fieldType === 'multiselect') ? (
               <label className="field-label">
                 Options (comma-separated)
                 <input
@@ -517,7 +544,7 @@ function CustomizeSectionModal({ section, onClose, onSaved }) {
             ) : null}
             <div>
               <button type="button" className="btn btn-sm" onClick={handleAddField}>
-                + Add Field
+                <Plus size={13} /> Add Field
               </button>
             </div>
           </div>
@@ -527,7 +554,7 @@ function CustomizeSectionModal({ section, onClose, onSaved }) {
               Cancel
             </button>
             <button type="submit" className="btn btn-primary" disabled={saving}>
-              {saving ? 'Saving…' : 'Save Section'}
+              {saving ? 'Saving…' : 'Save Template'}
             </button>
           </div>
         </form>
@@ -545,43 +572,44 @@ export function SectionsView({
   onSelectCompound,
   onRefresh,
 }) {
-  const [activeSectionId, setActiveSectionId] = useState('peptides');
+  const [activeSectionId, setActiveSectionId] = useState(sections[0]?.id || 'peptides');
   const [ownershipFilter, setOwnershipFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showCustomizeModal, setShowCustomizeModal] = useState(false);
   const [seeding, setSeeding] = useState(false);
 
-  const activeSection = useMemo(
-    () => sections.find((s) => s.id === activeSectionId) || sections[0] || null,
-    [sections, activeSectionId],
-  );
+  const activeSection = sections.find((s) => s.id === activeSectionId) || sections[0];
+  const activeMeta = SECTION_META[activeSection?.id] || {
+    short: activeSection?.name || 'Library',
+    editorial: activeSection?.name || 'Library',
+    Icon: Layers,
+    cls: 'sec-custom',
+  };
 
   const countBySection = useMemo(() => {
-    const m = {};
+    const map = {};
     for (const c of compounds || []) {
-      m[c.sectionId] = (m[c.sectionId] || 0) + 1;
+      map[c.sectionId] = (map[c.sectionId] || 0) + 1;
     }
-    return m;
+    return map;
   }, [compounds]);
 
   const filteredCompounds = useMemo(() => {
     const q = (searchQuery || '').trim().toLowerCase();
     return (compounds || []).filter((c) => {
       if (!q && activeSection && c.sectionId !== activeSection.id) return false;
+      const eff = resolveEffectiveOwnership(c.id, activeMemberId, ownership || []);
+      const ownStatus = eff?.status || 'dont_have';
+      if (ownershipFilter !== 'all' && ownStatus !== ownershipFilter) return false;
       if (statusFilter !== 'all' && c.profileStatus !== statusFilter) return false;
-      if (ownershipFilter !== 'all') {
-        const eff = resolveEffectiveOwnership(c.id, activeMemberId, ownership || []);
-        const st = eff?.status || 'dont_have';
-        if (st !== ownershipFilter) return false;
-      }
       if (q) {
         const hay = [
           c.name,
           c.slug,
+          c.subsection,
           c.summary,
           c.mechanismOfAction,
-          c.subsection,
           c.notes,
           ...(c.aliases || []),
           ...(c.tags || []),
@@ -594,7 +622,18 @@ export function SectionsView({
       }
       return true;
     });
-  }, [compounds, activeSection, ownershipFilter, statusFilter, activeMemberId, ownership, searchQuery]);
+  }, [compounds, ownership, activeMemberId, activeSection, ownershipFilter, statusFilter, searchQuery]);
+
+  // Group compounds cleanly by subsection for Aesop/Protocol-OS porcelain sheets
+  const groupedCompounds = useMemo(() => {
+    const groups = new Map();
+    for (const c of filteredCompounds) {
+      const key = (c.subsection || '').trim() || 'General Monographs';
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(c);
+    }
+    return [...groups.entries()];
+  }, [filteredCompounds]);
 
   const handleSeedStarter = async () => {
     setSeeding(true);
@@ -606,196 +645,218 @@ export function SectionsView({
     }
   };
 
+  const formatMetaLine = (cmp) => {
+    const parts = [];
+    if (cmp.dosages?.route) parts.push(cmp.dosages.route);
+    if (cmp.dosages?.defaultAmount != null && cmp.dosages?.defaultUnit) {
+      parts.push(`${cmp.dosages.defaultAmount} ${cmp.dosages.defaultUnit}`);
+    } else if (cmp.dosages?.rangeText) {
+      parts.push(cmp.dosages.rangeText.split('(')[0].split(',')[0].trim().slice(0, 24));
+    }
+    if (typeof cmp.halfLife?.valueHours === 'number' && Number.isFinite(cmp.halfLife.valueHours)) {
+      const h = cmp.halfLife.valueHours;
+      parts.push(h >= 48 ? `t½ ~${Number((h / 24).toFixed(1))}d` : `t½ ~${Number(h.toFixed(1))}h`);
+    } else if (cmp.dosages?.frequencyText) {
+      parts.push(cmp.dosages.frequencyText);
+    }
+    return parts.join('  ·  ');
+  };
+
   return (
     <div className="stack-v">
-      {/* Clean iOS Large Header */}
-      <div className="space-between" style={{ alignItems: 'flex-end' }}>
+      {/* Editorial Monumental Header */}
+      <div className="space-between" style={{ alignItems: 'flex-end', paddingTop: '0.2rem' }}>
         <div>
           <div className="eyebrow">
-            {searchQuery.trim() ? 'GLOBAL SEARCH' : 'COMPOUND LIBRARY'}
+            {searchQuery.trim()
+              ? `SEARCH · ${filteredCompounds.length} MATCHES`
+              : `APOTHECARY · ${(compounds || []).length} MONOGRAPHS`}
           </div>
-          <h1 className="display-title" style={{ marginTop: 4 }}>
-            {searchQuery.trim() ? `“${searchQuery}”` : activeSection?.name || 'Health Library'}
+          <h1 className="editorial-title" style={{ marginTop: 6 }}>
+            {searchQuery.trim() ? `“${searchQuery.trim()}”` : activeMeta.editorial}
           </h1>
-          <p className="muted" style={{ margin: '0.3rem 0 0', maxWidth: 620 }}>
-            {activeSection?.description || 'Curated profiles across peptides, PEDs, vitamins & supplements, and dermatology.'}
-          </p>
+          {activeSection?.description && !searchQuery.trim() ? (
+            <p className="italic-sub" style={{ margin: '0.3rem 0 0' }}>
+              {activeSection.description}
+            </p>
+          ) : null}
         </div>
 
         <div className="row-wrap">
-          {activeSection ? (
-            <button
-              type="button"
-              className="btn btn-sm"
-              data-testid="btn-customize-section"
-              onClick={() => setShowCustomizeModal(true)}
-            >
-              <SlidersHorizontal size={14} /> Customize
-            </button>
-          ) : null}
+          <button
+            type="button"
+            className="btn btn-sm"
+            data-testid="btn-customize-section"
+            onClick={() => setShowCustomizeModal(true)}
+          >
+            <SlidersHorizontal size={13} strokeWidth={1.8} /> Customize
+          </button>
           <button
             type="button"
             className="btn btn-primary btn-sm"
             data-testid="btn-add-compound"
             onClick={() => setShowAddModal(true)}
           >
-            <Plus size={15} /> Add Compound
+            <Plus size={14} strokeWidth={2} /> Add Compound
           </button>
         </div>
       </div>
 
-      {/* Segmented Section Tabs + Compact Filters */}
-      <div className="space-between">
-        <div className="section-tabs" role="tablist" aria-label="Health Sections">
+      {/* Organic Floating Category Pills + Whisper Filters */}
+      <div className="space-between" style={{ gap: '0.65rem' }}>
+        <div className="cat-pills" role="tablist" aria-label="Health sections">
           {(sections || []).map((sec) => {
             const meta = SECTION_META[sec.id] || { short: sec.name, Icon: Layers };
-            const Icon = meta.Icon;
-            const cnt = countBySection[sec.id] || 0;
+            const SecIcon = meta.Icon;
+            const active = activeSection?.id === sec.id;
             return (
               <button
                 key={sec.id}
                 type="button"
                 role="tab"
-                aria-selected={activeSection?.id === sec.id}
+                aria-selected={active}
+                aria-label={sec.name}
                 data-testid={`section-tab-${sec.id}`}
-                className={`tab-btn${activeSection?.id === sec.id ? ' active' : ''}`}
+                className={`cat-pill${active ? ' active' : ''}`}
                 onClick={() => setActiveSectionId(sec.id)}
               >
-                <Icon size={14} />
-                <span>{sec.name}</span>
-                {cnt > 0 ? <span className="tab-count">{cnt}</span> : null}
+                <SecIcon size={13} strokeWidth={1.8} />
+                <span>{meta.short}</span>
+                <span className="pill-num">{countBySection[sec.id] || 0}</span>
               </button>
             );
           })}
         </div>
 
-        <div className="row-wrap">
-          <select
-            data-testid="filter-ownership"
-            aria-label="Filter by ownership"
-            value={ownershipFilter}
-            onChange={(e) => setOwnershipFilter(e.target.value)}
-            style={{ padding: '0.42rem 0.7rem', fontSize: '0.82rem' }}
-          >
-            <option value="all">All Stock</option>
-            <option value="have">In Cabinet</option>
-            <option value="dont_have">Don&apos;t Have</option>
-            <option value="wishlist">Wishlist</option>
-            <option value="low_stock">Low Stock</option>
-            <option value="ordered">Ordered</option>
-          </select>
+        <div className="row-wrap" style={{ gap: '0.4rem' }}>
+          <div className="select-pill ghost">
+            <select
+              data-testid="filter-ownership"
+              aria-label="Filter by ownership"
+              value={ownershipFilter}
+              onChange={(e) => setOwnershipFilter(e.target.value)}
+            >
+              <option value="all">All Stock</option>
+              <option value="have">have</option>
+              <option value="dont_have">dont_have</option>
+              <option value="wishlist">wishlist</option>
+              <option value="low_stock">low_stock</option>
+              <option value="ordered">ordered</option>
+            </select>
+            <ChevronDown size={12} strokeWidth={1.8} className="sel-chev" aria-hidden="true" />
+          </div>
 
-          <select
-            data-testid="filter-status"
-            aria-label="Filter by review status"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            style={{ padding: '0.42rem 0.7rem', fontSize: '0.82rem' }}
-          >
-            <option value="all">All Profiles</option>
-            <option value="verified">Verified</option>
-            <option value="ai_draft">AI Draft</option>
-            <option value="needs_review">Needs Review</option>
-          </select>
+          <div className="select-pill ghost">
+            <select
+              data-testid="filter-status"
+              aria-label="Filter by verification status"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <option value="all">All Profiles</option>
+              <option value="verified">verified</option>
+              <option value="ai_draft">ai_draft</option>
+              <option value="needs_review">needs_review</option>
+            </select>
+            <ChevronDown size={12} strokeWidth={1.8} className="sel-chev" aria-hidden="true" />
+          </div>
         </div>
       </div>
 
-      {/* Compound Grid */}
+      {/* Sculptural Porcelain Grouped Compound Index */}
       {filteredCompounds.length === 0 ? (
-        <div className="glass stack-v" style={{ textAlign: 'center', padding: '2.6rem 1.4rem', alignItems: 'center' }}>
-          <div className="eyebrow">
-            {(compounds || []).length === 0 ? 'GET STARTED' : 'NO MATCHES'}
-          </div>
-          <h2 className="display-sm">
-            {(compounds || []).length === 0 ? 'Your Library Is Ready' : 'Nothing matches this filter'}
+        <div className="atelier-card stack-sm" style={{ textAlign: 'center', padding: '3rem 1.5rem', alignItems: 'center' }}>
+          <Sparkles size={26} strokeWidth={1.5} color="var(--accent)" />
+          <h2 className="display-sm" style={{ marginTop: 4 }}>
+            {(compounds || []).length === 0 ? 'Your Apothecary Is Ready' : 'No Matching Monographs'}
           </h2>
-          <p className="muted" style={{ margin: 0, maxWidth: 460 }}>
+          <p className="muted" style={{ margin: 0, maxWidth: 440 }}>
             {(compounds || []).length === 0
-              ? 'Load 26 curated reference profiles across Peptides, PEDs, Vitamins, and Dermatology — or add your first compound.'
-              : 'Try switching sections, clearing search, or resetting your stock filter.'}
+              ? 'Load the 26-compound Starter Reference Library across Peptides, PEDs, Vitamins, and Dermatology, or author your first monograph.'
+              : 'Clear your search or filters to browse every compound in this discipline.'}
           </p>
           {(compounds || []).length === 0 ? (
-            <div className="row-wrap" style={{ justifyContent: 'center', marginTop: 4 }}>
+            <div className="row-wrap" style={{ marginTop: '0.75rem', justifyContent: 'center' }}>
               <button
                 type="button"
                 className="btn btn-primary"
                 disabled={seeding}
                 onClick={handleSeedStarter}
               >
-                <Sparkles size={15} /> {seeding ? 'Loading Library…' : 'Load 26 Starter Reference Profiles'}
+                <Sparkles size={14} strokeWidth={1.8} /> {seeding ? 'Loading Library…' : 'Load 26 Starter Monographs'}
               </button>
               <button type="button" className="btn" onClick={() => setShowAddModal(true)}>
-                <Plus size={15} /> Add Compound
+                <Plus size={14} /> Add Compound
               </button>
             </div>
           ) : null}
         </div>
       ) : (
-        <div className="grid-3">
-          {filteredCompounds.map((cmp) => {
-            const effOwn = resolveEffectiveOwnership(cmp.id, activeMemberId, ownership || []);
-            const ownStatus = effOwn?.status || 'dont_have';
-            const shortDose =
-              cmp.dosages?.defaultAmount != null && cmp.dosages?.defaultUnit
-                ? `${cmp.dosages.defaultAmount} ${cmp.dosages.defaultUnit}`
-                : (cmp.dosages?.rangeText || '').split('(')[0].split(',')[0].trim().slice(0, 24);
-            const shortHl =
-              typeof cmp.halfLife?.valueHours === 'number' && Number.isFinite(cmp.halfLife.valueHours)
-                ? cmp.halfLife.valueHours >= 48
-                  ? `t½ ~${Number((cmp.halfLife.valueHours / 24).toFixed(1))}d`
-                  : `t½ ~${Number(cmp.halfLife.valueHours.toFixed(1))}h`
-                : cmp.halfLife?.displayText
-                  ? cmp.halfLife.displayText.split('(')[0].split('—')[0].trim().slice(0, 18)
-                  : '';
-            return (
-              <article
-                key={cmp.id}
-                className="card compound-card"
-                data-testid={`compound-card-${cmp.id}`}
-                data-slug={cmp.slug}
-                onClick={() => onSelectCompound(cmp.id)}
-              >
-                <div className="space-between" style={{ alignItems: 'flex-start', gap: '0.4rem' }}>
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <h3 style={{ fontSize: '1rem', lineHeight: 1.25 }}>{cmp.name}</h3>
-                    {cmp.subsection ? (
-                      <div className="dim" style={{ marginTop: 2 }}>{cmp.subsection}</div>
-                    ) : null}
-                  </div>
-                  <span className={`pill pill-${ownStatus}`}>
-                    {OWN_LABEL[ownStatus] || ownStatus}
-                  </span>
-                </div>
+        <div className="stack-v" style={{ gap: '1.35rem' }}>
+          {groupedCompounds.map(([groupName, groupItems]) => (
+            <section key={groupName}>
+              <div className="section-h">
+                <span>{groupName}</span>
+                <span className="sh-count">{String(groupItems.length).padStart(2, '0')}</span>
+              </div>
 
-                <p className="muted clamp-2" style={{ margin: 0 }}>
-                  {cmp.summary || cmp.mechanismOfAction || 'Tap to view full monograph.'}
-                </p>
+              <div className="list-sheet">
+                {groupItems.map((cmp) => {
+                  const effOwn = resolveEffectiveOwnership(cmp.id, activeMemberId, ownership || []);
+                  const ownStatus = effOwn?.status || 'dont_have';
+                  const secMeta = SECTION_META[cmp.sectionId] || { Icon: Layers, cls: 'sec-custom' };
+                  const RowIcon = secMeta.Icon;
+                  const metaLine = formatMetaLine(cmp);
+                  const ownLabel = OWN_CUE[ownStatus] || '';
+                  const isDraft = cmp.profileStatus && cmp.profileStatus !== 'verified';
 
-                <div className="row-wrap" style={{ marginTop: 'auto', paddingTop: '0.45rem', borderTop: '1px solid var(--border-subtle)' }}>
-                  {shortDose ? (
-                    <span className="pill pill-accent num">{shortDose}</span>
-                  ) : null}
-                  {cmp.dosages?.route ? (
-                    <span className="pill">{cmp.dosages.route}</span>
-                  ) : null}
-                  {shortHl ? (
-                    <span className="pill num">
-                      <Clock size={10} /> {shortHl}
-                    </span>
-                  ) : null}
-                  {cmp.profileStatus !== 'verified' ? (
-                    <span className={`pill pill-${cmp.profileStatus}`}>
-                      <Sparkles size={10} /> {cmp.profileStatus === 'ai_draft' ? 'AI Draft' : 'Review'}
-                    </span>
-                  ) : (
-                    <span className="pill pill-verified" title="Verified">
-                      <CheckCircle2 size={10} /> Verified
-                    </span>
-                  )}
-                </div>
-              </article>
-            );
-          })}
+                  return (
+                    <article
+                      key={cmp.id}
+                      className="list-row clickable compound-card"
+                      data-testid={`compound-card-${cmp.id}`}
+                      data-slug={cmp.slug}
+                      onClick={() => onSelectCompound(cmp.id)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          onSelectCompound(cmp.id);
+                        }
+                      }}
+                    >
+                      <div className={`row-medallion ${secMeta.cls}`} aria-hidden="true">
+                        <RowIcon size={17} strokeWidth={1.7} />
+                      </div>
+
+                      <div className="row-body">
+                        <div className="row-title">{cmp.name}</div>
+                        {metaLine ? <div className="row-meta">{metaLine}</div> : null}
+                        {cmp.summary ? <div className="row-desc">{cmp.summary}</div> : null}
+                      </div>
+
+                      <div className="row-trailing">
+                        {ownLabel ? (
+                          <span className={`status-cue ${ownStatus}`}>
+                            <span className="dot" />
+                            {ownLabel}
+                          </span>
+                        ) : null}
+                        {isDraft ? (
+                          <span className="status-cue ai_draft">
+                            <span className="dot" />
+                            {cmp.profileStatus === 'ai_draft' ? 'AI Draft' : 'Review'}
+                          </span>
+                        ) : null}
+                        <ChevronRight size={16} strokeWidth={1.6} className="row-chevron" aria-hidden="true" />
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
         </div>
       )}
 

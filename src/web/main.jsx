@@ -108,6 +108,21 @@ function App() {
     if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js').catch(() => {});
     }
+    // Load editorial web fonts only when online on public/hosted origins (zero offline/test network noise)
+    if (
+      typeof window !== 'undefined' &&
+      typeof document !== 'undefined' &&
+      navigator.onLine &&
+      !/^(localhost|127\.0\.0\.1|::1|\[::1\])$/i.test(window.location.hostname || '') &&
+      !document.getElementById('hp-editorial-fonts')
+    ) {
+      const link = document.createElement('link');
+      link.id = 'hp-editorial-fonts';
+      link.rel = 'stylesheet';
+      link.href =
+        'https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap';
+      document.head.appendChild(link);
+    }
   }, []);
 
   // Online/offline listeners

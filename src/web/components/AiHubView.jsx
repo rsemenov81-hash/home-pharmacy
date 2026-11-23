@@ -7,7 +7,6 @@ import {
   Copy,
   FileJson,
   Trash2,
-  Bot,
   History,
   AlertTriangle,
   CheckCircle2,
@@ -120,38 +119,38 @@ export function AiHubView({
         name: targetName,
         sectionId: promptSectionId,
       });
-      setGeneratedPrompt(res.json?.prompt || buildFallbackPromptText(targetName, sections.find((s) => s.id === promptSectionId)));
+      setGeneratedPrompt(
+        res.json?.prompt ||
+          res.json?.promptText ||
+          buildFallbackPromptText(targetName, sections.find((s) => s.id === promptSectionId)),
+      );
     } catch {
-      setGeneratedPrompt(buildFallbackPromptText(targetName, sections.find((s) => s.id === promptSectionId)));
+      setGeneratedPrompt(
+        buildFallbackPromptText(targetName, sections.find((s) => s.id === promptSectionId)),
+      );
     } finally {
       setPromptLoading(false);
     }
   };
 
-  const handleImportAiJson = async () => {
+  const handleImportJson = async (e) => {
+    e.preventDefault();
     setImportError('');
     setImportStatus('');
-    const raw = jsonInput.trim();
-    if (!raw) {
-      setImportError('Paste a compound JSON profile before importing.');
-      return;
-    }
-
     let parsed;
     try {
-      parsed = JSON.parse(raw);
-    } catch (err) {
-      setImportError(`Invalid JSON syntax: ${err.message}`);
+      const cleaned = jsonInput
+        .trim()
+        .replace(/^```(?:json)?\s*/i, '')
+        .replace(/\s*```$/i, '');
+      parsed = JSON.parse(cleaned);
+    } catch {
+      setImportError('Invalid JSON — paste a valid JSON object from your AI assistant.');
       return;
     }
 
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      setImportError('Invalid JSON payload: expected a compound profile object.');
-      return;
-    }
-
-    if (!parsed.name || !String(parsed.name).trim() || !parsed.sectionId || !String(parsed.sectionId).trim()) {
-      setImportError('Validation error: required fields "name" and "sectionId" must be provided.');
+      setImportError('Expected a single JSON compound object.');
       return;
     }
 
@@ -219,7 +218,7 @@ export function AiHubView({
     }
   };
 
-  const handleCopyContextMd = async () => {
+  const handleCopyContext = async () => {
     setContextMsg('');
     try {
       const res = await api.get(`/api/v1/export/context.md?member=${encodeURIComponent(activeMemberId)}`, {
@@ -227,250 +226,247 @@ export function AiHubView({
       });
       const md = res.text || '';
       setContextPreview(md);
-      try {
-        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-          await navigator.clipboard.writeText(md);
-        }
-      } catch {
-        // clipboard unavailable in headless contexts
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(md).catch(() => {});
       }
-      setContextMsg('Copied your clean Markdown health context — paste into Gemini, Claude, Grok, ChatGPT, or Muse.');
+      setContextMsg('Copied AI Context Markdown to clipboard.');
     } catch (err) {
-      setContextMsg(err.message || 'Could not export context.');
+      setContextMsg(err.message || 'Could not generate Context Markdown.');
     }
   };
 
+  const copyText = (txt, label) => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(txt).catch(() => {});
+    }
+    setContextMsg(`Copied ${label}.`);
+  };
+
+  const aiGuides = [
+    {
+      testId: 'ai-guide-claude',
+      monogram: 'C',
+      name: 'Claude',
+      badge: 'MCP · OAuth 2.1',
+      desc: 'Add as a Remote MCP Connector — auto-discovers OAuth 2.1 with PKCE.',
+      endpoint: `${origin}/mcp`,
+      copyLabel: 'Claude MCP URL',
+    },
+    {
+      testId: 'ai-guide-gemini',
+      monogram: 'G',
+      name: 'Gemini',
+      badge: 'MCP · Context MD',
+      desc: 'Connect via Remote MCP (Bearer or ?token=) or paste Context MD in Gems.',
+      endpoint: `${origin}/mcp`,
+      copyLabel: 'Gemini MCP URL',
+    },
+    {
+      testId: 'ai-guide-grok',
+      monogram: 'X',
+      name: 'Grok Bot',
+      badge: 'Remote MCP · REST',
+      desc: 'Point Grok to /mcp with a scoped API key or query /api/v1/compounds.',
+      endpoint: `${origin}/api/v1/compounds`,
+      copyLabel: 'Grok REST URL',
+    },
+    {
+      testId: 'ai-guide-gpt',
+      monogram: 'O',
+      name: 'ChatGPT / GPT',
+      badge: 'MCP · OpenAPI 3.1',
+      desc: 'Connect via ChatGPT MCP or import /openapi.json directly into GPT Actions.',
+      endpoint: `${origin}/openapi.json`,
+      copyLabel: 'OpenAPI URL',
+    },
+    {
+      testId: 'ai-guide-muse',
+      monogram: 'M',
+      name: 'Meta Muse',
+      badge: 'llms.txt · Context',
+      desc: 'Use OpenAPI / llms.txt discovery or paste your Context MD directly in chat.',
+      endpoint: `${origin}/llms.txt`,
+      copyLabel: 'llms.txt URL',
+    },
+  ];
+
   return (
     <div className="stack-v">
-      <div className="space-between" style={{ alignItems: 'flex-end' }}>
+      {/* Editorial Header */}
+      <div className="space-between" style={{ alignItems: 'flex-end', paddingTop: '0.2rem' }}>
         <div>
-          <div className="eyebrow">MULTI-AI ASSISTANT HUB</div>
-          <h1 className="display-title" style={{ marginTop: 4 }}>Connect Your AIs</h1>
-          <p className="muted" style={{ margin: '0.25rem 0 0' }}>
-            Research new compounds with Gemini, Claude, Grok, ChatGPT, or Muse — and review AI updates in one place.
+          <div className="eyebrow">MULTI-AI ATELIER · 5 ASSISTANTS</div>
+          <h1 className="editorial-title" style={{ marginTop: 6 }}>AI Hub</h1>
+          <p className="italic-sub" style={{ margin: '0.3rem 0 0' }}>
+            Research with Claude, Gemini, Grok, ChatGPT, and Meta Muse — review proposals before saving.
           </p>
         </div>
 
         <div className="row-wrap">
+          <button
+            type="button"
+            className="btn btn-sm"
+            data-testid="btn-copy-context-md"
+            onClick={handleCopyContext}
+          >
+            <Copy size={13} strokeWidth={1.8} /> Copy Context MD
+          </button>
           <button
             type="button"
             className="btn btn-primary btn-sm"
             data-testid="btn-open-ai-prompt-builder"
             onClick={openPromptBuilder}
           >
-            <Sparkles size={14} /> Research with AI
-          </button>
-          <button
-            type="button"
-            className="btn btn-sm"
-            data-testid="btn-copy-context-md"
-            onClick={handleCopyContextMd}
-          >
-            <Copy size={14} /> Copy Context
+            <Sparkles size={13} strokeWidth={1.8} /> Research Prompt
           </button>
         </div>
       </div>
 
       {contextMsg ? (
         <div className="banner-ok" role="status">
+          <CheckCircle2 size={14} style={{ verticalAlign: 'middle', marginRight: 6 }} />
           {contextMsg}
         </div>
       ) : null}
 
       {contextPreview ? (
-        <details className="card">
-          <summary style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--accent)' }}>
-            View Copied Context ({contextPreview.length} chars)
+        <details className="atelier-card">
+          <summary className="eyebrow" style={{ cursor: 'pointer' }}>
+            Context Markdown Preview ({contextPreview.length} chars)
           </summary>
-          <pre className="code-block" style={{ marginTop: '0.6rem', maxHeight: 220 }}>
-            {contextPreview}
+          <pre className="code-block" style={{ marginTop: '0.65rem', whiteSpace: 'pre-wrap' }}>
+            {contextPreview.slice(0, 1200)}
           </pre>
         </details>
       ) : null}
 
-      {/* 1. AI Proposals Inbox */}
-      <section className="card stack-sm" data-testid="ai-proposals-list">
-        <div className="space-between">
-          <div>
-            <div className="eyebrow">REVIEW QUEUE</div>
-            <h2 className="section-heading">AI Proposals ({pendingProposals.length} pending)</h2>
-          </div>
+      {/* 1. Pending Proposals Inbox */}
+      <section className="stack-sm" data-testid="ai-proposals-list">
+        <div className="section-h">
+          <span>Review Proposals</span>
+          <span className="sh-count">{String(pendingProposals.length).padStart(2, '0')} pending</span>
         </div>
 
         {proposalMsg ? <div className="banner-ok" role="status">{proposalMsg}</div> : null}
         {proposalErr ? <div className="banner-danger" role="alert">{proposalErr}</div> : null}
 
         {pendingProposals.length === 0 ? (
-          <p className="muted" style={{ margin: 0 }}>
-            All caught up — when an AI proposes a new compound or suggests edits to a verified profile, it appears here for 1-tap approval.
-          </p>
+          <div className="atelier-card">
+            <p className="muted" style={{ margin: 0 }}>
+              No pending AI proposals. Suggested edits to verified profiles and stack changes appear here for approval.
+            </p>
+          </div>
         ) : (
-          <div className="stack-sm">
+          <div className="list-sheet">
             {pendingProposals.map((p) => (
-              <div key={p.id} className="slot-card slot-populated stack-sm">
-                <div className="space-between">
-                  <div>
-                    <strong>{p.summary || p.proposedPayload?.name || p.type}</strong>
-                    <div className="dim">
-                      {p.sourceModel || p.actor || 'AI'} · {p.type.replace(/_/g, ' ')}
-                    </div>
+              <article key={p.id} className="list-row" style={{ alignItems: 'flex-start' }}>
+                <div className="row-body">
+                  <div className="row-wrap" style={{ gap: '0.45rem' }}>
+                    <span className="row-title">{p.summary || p.reason || p.proposalType || p.kind || 'AI Proposal'}</span>
+                    <span className="pill pill-accent mono">{p.actor || p.sourceActor || 'ai'}</span>
                   </div>
-                  <div className="row-wrap">
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-sm"
-                      data-testid={`btn-approve-proposal-${p.id}`}
-                      onClick={() => handleResolveProposal(p.id, 'approve')}
-                    >
-                      <Check size={14} /> Approve
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-danger btn-sm"
-                      data-testid={`btn-dismiss-proposal-${p.id}`}
-                      onClick={() => handleResolveProposal(p.id, 'dismiss')}
-                    >
-                      <X size={14} /> Dismiss
-                    </button>
+                  <div className="row-meta" style={{ marginTop: 2 }}>
+                    {(p.proposalType || p.kind || 'update').replace(/_/g, ' ')}
+                    {p.targetId ? `  ·  target: ${p.targetId}` : ''}
                   </div>
                 </div>
-                {p.proposedPayload?.name || p.proposedPatch ? (
-                  <details>
-                    <summary className="dim" style={{ cursor: 'pointer' }}>Inspect proposed fields</summary>
-                    <pre className="code-block" style={{ marginTop: 6, maxHeight: 140 }}>
-                      {JSON.stringify(p.proposedPayload || p.proposedPatch, null, 2)}
-                    </pre>
-                  </details>
-                ) : null}
-              </div>
+                <div className="row-wrap" style={{ flexShrink: 0, gap: '0.35rem' }}>
+                  <button
+                    type="button"
+                    className="btn btn-success btn-sm"
+                    data-testid={`btn-approve-proposal-${p.id}`}
+                    onClick={() => handleResolveProposal(p.id, 'approve')}
+                  >
+                    <Check size={13} strokeWidth={2} /> Approve
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-danger btn-sm"
+                    data-testid={`btn-dismiss-proposal-${p.id}`}
+                    onClick={() => handleResolveProposal(p.id, 'dismiss')}
+                  >
+                    <X size={13} strokeWidth={2} /> Dismiss
+                  </button>
+                </div>
+              </article>
             ))}
           </div>
         )}
       </section>
 
-      {/* 2. Paste AI JSON */}
-      <section className="card stack-sm">
-        <div className="row-wrap">
-          <FileJson size={16} color="var(--accent)" />
+      {/* 2. Quick JSON Import */}
+      <section className="atelier-card stack-sm">
+        <div className="space-between">
           <div>
-            <div className="eyebrow">QUICK IMPORT</div>
-            <h2 className="section-heading">Add Compound from AI Reply</h2>
+            <div className="eyebrow">PASTE AI RESEARCH</div>
+            <h2 className="display-sm" style={{ marginTop: 2 }}>Import Compound JSON</h2>
           </div>
+          <FileJson size={17} strokeWidth={1.6} color="var(--accent)" />
         </div>
-        <p className="muted" style={{ margin: 0 }}>
-          Tap <strong>Research with AI</strong> above, ask your favorite AI to fill out a compound, then paste the JSON reply here.
-        </p>
+
+        {importStatus ? <div className="banner-ok" role="status">{importStatus}</div> : null}
         {importError ? (
           <div className="banner-danger" role="alert">
             <AlertTriangle size={14} style={{ verticalAlign: 'middle', marginRight: 6 }} />
             {importError}
           </div>
         ) : null}
-        {importStatus ? (
-          <div className="banner-ok" role="status">
-            <CheckCircle2 size={14} style={{ verticalAlign: 'middle', marginRight: 6 }} />
-            {importStatus}
-          </div>
-        ) : null}
-        <label className="field-label">
-          AI Compound JSON
+
+        <form onSubmit={handleImportJson} className="stack-sm">
           <textarea
             data-testid="ai-json-import-textarea"
+            aria-label="AI compound JSON payload"
             rows={4}
-            placeholder='{"name": "Semax", "sectionId": "peptides", "summary": "...", ...}'
+            placeholder='Paste a researched compound JSON object (e.g., { "name": "Epitalon", "sectionId": "peptides", "summary": "..." })'
             value={jsonInput}
             onChange={(e) => setJsonInput(e.target.value)}
           />
-        </label>
-        <div>
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            data-testid="btn-import-ai-json"
-            disabled={importing}
-            onClick={handleImportAiJson}
-          >
-            {importing ? 'Importing…' : 'Import to Library'}
-          </button>
-        </div>
+          <div>
+            <button type="submit" className="btn btn-primary btn-sm" data-testid="btn-import-ai-json" disabled={importing}>
+              {importing ? 'Importing…' : 'Validate & Import'}
+            </button>
+          </div>
+        </form>
       </section>
 
-      {/* 3. Five AI Assistants */}
+      {/* 3. 5-AI Integration Directory (Unified Porcelain Grouped Sheet) */}
       <section className="stack-sm">
-        <div className="row-wrap">
-          <Bot size={16} color="var(--accent)" />
-          <div>
-            <div className="eyebrow">5-AI ECOSYSTEM</div>
-            <h2 className="section-heading">Works With Every AI You Use</h2>
-          </div>
+        <div className="section-h">
+          <span>Connect Your 5 AIs</span>
+          <span className="sh-count">05</span>
         </div>
 
-        <div className="grid-3">
-          <article className="card stack-sm" data-testid="ai-guide-gemini">
-            <div className="space-between">
-              <strong style={{ color: 'var(--accent)' }}>Google Gemini</strong>
-              <span className="pill">MCP · Gems</span>
-            </div>
-            <p className="muted" style={{ margin: 0 }}>
-              Connect via Remote MCP or paste your Context bundle into a Gemini Gem.
-            </p>
-            <div className="code-block">{origin}/mcp</div>
-          </article>
-
-          <article className="card stack-sm" data-testid="ai-guide-claude">
-            <div className="space-between">
-              <strong style={{ color: 'var(--accent)' }}>Anthropic Claude</strong>
-              <span className="pill">OAuth 2.1 · MCP</span>
-            </div>
-            <p className="muted" style={{ margin: 0 }}>
-              Add as a Custom Connector in Claude.ai or Claude Code with automatic OAuth sign-in.
-            </p>
-            <div className="code-block">{origin}/mcp</div>
-          </article>
-
-          <article className="card stack-sm" data-testid="ai-guide-grok">
-            <div className="space-between">
-              <strong style={{ color: 'var(--accent)' }}>xAI Grok Bot</strong>
-              <span className="pill">MCP · REST</span>
-            </div>
-            <p className="muted" style={{ margin: 0 }}>
-              Connect Grok Bot using a scoped Bearer API key minted below.
-            </p>
-            <div className="code-block">{origin}/api/v1/compounds</div>
-          </article>
-
-          <article className="card stack-sm" data-testid="ai-guide-gpt">
-            <div className="space-between">
-              <strong style={{ color: 'var(--accent)' }}>ChatGPT / GPT</strong>
-              <span className="pill">OpenAPI 3.1 · MCP</span>
-            </div>
-            <p className="muted" style={{ margin: 0 }}>
-              Import the OpenAPI schema into Custom GPT Actions or connect via Remote MCP.
-            </p>
-            <div className="code-block">{origin}/openapi.json</div>
-          </article>
-
-          <article className="card stack-sm" data-testid="ai-guide-muse">
-            <div className="space-between">
-              <strong style={{ color: 'var(--accent)' }}>Meta Muse</strong>
-              <span className="pill">OpenAPI · Context</span>
-            </div>
-            <p className="muted" style={{ margin: 0 }}>
-              Use OpenAPI / llms.txt discovery or paste your Context MD directly in chat.
-            </p>
-            <div className="code-block">{origin}/llms.txt</div>
-          </article>
+        <div className="list-sheet">
+          {aiGuides.map((g) => (
+            <article key={g.testId} className="list-row" data-testid={g.testId}>
+              <div className="row-medallion sec-peptides mono" style={{ fontWeight: 700, fontSize: '0.82rem' }} aria-hidden="true">
+                {g.monogram}
+              </div>
+              <div className="row-body">
+                <div className="row-wrap" style={{ gap: '0.45rem' }}>
+                  <span className="row-title">{g.name}</span>
+                  <span className="pill mono">{g.badge}</span>
+                </div>
+                <div className="row-desc">{g.desc}</div>
+                <div className="row-meta" style={{ color: 'var(--accent)', marginTop: 2 }}>{g.endpoint}</div>
+              </div>
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={() => copyText(g.endpoint, g.copyLabel)}
+              >
+                <Copy size={12} strokeWidth={1.8} /> Copy
+              </button>
+            </article>
+          ))}
         </div>
       </section>
 
       {/* 4. Scoped API Keys & OAuth Clients */}
-      <section className="card stack-sm">
-        <div className="row-wrap">
-          <KeyRound size={16} color="var(--accent)" />
-          <div>
-            <div className="eyebrow">ACCESS KEYS</div>
-            <h2 className="section-heading">Scoped AI Keys &amp; Connections</h2>
-          </div>
+      <section className="atelier-card stack-sm">
+        <div>
+          <div className="eyebrow">ACCESS CREDENTIALS</div>
+          <h2 className="display-sm" style={{ marginTop: 2 }}>Scoped AI Keys</h2>
         </div>
 
         {keyError ? <div className="banner-danger" role="alert">{keyError}</div> : null}
@@ -509,24 +505,25 @@ export function AiHubView({
             </select>
           </label>
           <button type="submit" className="btn btn-primary" data-testid="btn-mint-api-key" disabled={minting}>
-            <KeyRound size={14} /> {minting ? 'Creating…' : 'Create Key'}
+            <KeyRound size={14} strokeWidth={1.8} /> {minting ? 'Creating…' : 'Create Key'}
           </button>
         </form>
 
         {keys.length > 0 ? (
-          <div className="stack-sm">
+          <div className="stack-sm" style={{ paddingTop: '0.4rem' }}>
             {keys.map((k) => {
               const shortPrefix = (k.prefix || 'hp_key').slice(0, 12);
               return (
-                <div key={k.id} className="card-subtle space-between">
+                <div key={k.id} className="space-between" style={{ padding: '0.55rem 0', borderTop: '1px solid var(--hair-subtle)' }}>
                   <div>
-                    <strong>{k.name}</strong> <span className="pill pill-accent">{k.scope}</span>
-                    <div className="dim num" title={k.prefix || ''}>
+                    <strong style={{ fontSize: '0.9rem' }}>{k.name}</strong>{' '}
+                    <span className="pill pill-accent mono">{k.scope}</span>
+                    <div className="dim mono" title={k.prefix || ''}>
                       {shortPrefix}… · {k.createdAt ? k.createdAt.slice(0, 10) : '—'}
                     </div>
                   </div>
                   <button type="button" className="btn btn-danger btn-sm" onClick={() => handleRevokeKey(k.id)}>
-                    <Trash2 size={13} /> Revoke
+                    <Trash2 size={12} /> Revoke
                   </button>
                 </div>
               );
@@ -535,16 +532,16 @@ export function AiHubView({
         ) : null}
 
         {oauthClients.length > 0 ? (
-          <div className="stack-sm">
+          <div className="stack-sm" style={{ paddingTop: '0.5rem', borderTop: '1px solid var(--hair-subtle)' }}>
             <div className="eyebrow">CONNECTED OAUTH APPS</div>
             {oauthClients.map((c) => {
               const cid = String(c.client_id || c.id || '');
               const shortCid = cid.length > 14 ? `${cid.slice(0, 10)}…` : cid;
               return (
-                <div key={cid} className="card-subtle space-between">
+                <div key={cid} className="space-between" style={{ padding: '0.4rem 0' }}>
                   <div>
-                    <strong>{c.client_name || shortCid}</strong>
-                    <div className="dim num" title={cid}>ID: {shortCid}</div>
+                    <strong style={{ fontSize: '0.9rem' }}>{c.client_name || shortCid}</strong>
+                    <div className="dim mono" title={cid}>ID: {shortCid}</div>
                   </div>
                   <button type="button" className="btn btn-danger btn-sm" onClick={() => handleRevokeOAuth(c.client_id)}>
                     Revoke
@@ -557,15 +554,15 @@ export function AiHubView({
       </section>
 
       {auditLog.length > 0 ? (
-        <details className="card">
+        <details className="atelier-card">
           <summary className="row-wrap" style={{ cursor: 'pointer', fontWeight: 600 }}>
-            <History size={15} color="var(--accent)" />
-            <span>Recent Activity Log ({auditLog.length})</span>
+            <History size={15} strokeWidth={1.7} color="var(--accent)" />
+            <span className="eyebrow">RECENT ACTIVITY LEDGER ({auditLog.length})</span>
           </summary>
-          <div className="stack-sm" style={{ marginTop: '0.65rem' }}>
+          <div className="stack-sm" style={{ marginTop: '0.75rem' }}>
             {auditLog.slice(0, 10).map((entry, idx) => (
-              <div key={entry.id || idx} className="dim">
-                <code style={{ color: 'var(--accent)' }}>{entry.actor || 'system'}</code> · {entry.summary || entry.action}
+              <div key={entry.id || idx} className="dim" style={{ paddingTop: idx ? '0.4rem' : 0, borderTop: idx ? '1px solid var(--hair-subtle)' : 'none' }}>
+                <code className="mono" style={{ color: 'var(--accent)' }}>{entry.actor || 'system'}</code> · {entry.summary || entry.action}
               </div>
             ))}
           </div>
@@ -579,13 +576,10 @@ export function AiHubView({
             <div className="space-between">
               <div>
                 <div className="eyebrow">AI RESEARCH ASSISTANT</div>
-                <h2 className="display-sm">Research Prompt Builder</h2>
+                <h2 className="display-sm" style={{ marginTop: 2 }}>Research Prompt Builder</h2>
               </div>
               <button type="button" className="btn btn-sm" onClick={() => setShowPromptModal(false)}>Close</button>
             </div>
-            <p className="muted" style={{ margin: 0 }}>
-              Type any compound below, copy the tailored prompt into Gemini, Claude, Grok, ChatGPT, or Muse, then paste its JSON reply back into AI Hub.
-            </p>
             <form onSubmit={handleGeneratePrompt} className="stack-sm">
               <div className="grid-2">
                 <label className="field-label">
@@ -593,14 +587,15 @@ export function AiHubView({
                   <input
                     type="text"
                     name="compoundName"
-                    placeholder="e.g., Thymosin Beta-4, Azelaic Acid"
+                    placeholder="e.g., Epitalon, Magnesium L-Threonate"
                     value={promptCompoundName}
                     onChange={(e) => setPromptCompoundName(e.target.value)}
+                    autoFocus
                   />
                 </label>
                 <label className="field-label">
                   Section
-                  <select value={promptSectionId} onChange={(e) => setPromptSectionId(e.target.value)}>
+                  <select name="sectionId" value={promptSectionId} onChange={(e) => setPromptSectionId(e.target.value)}>
                     {(sections || []).map((s) => (
                       <option key={s.id} value={s.id}>{s.name}</option>
                     ))}
@@ -614,15 +609,15 @@ export function AiHubView({
                 <button
                   type="button"
                   className="btn btn-sm"
-                  onClick={() => navigator.clipboard?.writeText?.(generatedPrompt).catch(() => {})}
+                  onClick={() => copyText(generatedPrompt, 'research prompt')}
                 >
                   <Copy size={13} /> Copy Prompt
                 </button>
               </div>
             </form>
             <label className="field-label">
-              Ready-to-Paste Prompt
-              <textarea readOnly rows={11} value={generatedPrompt} aria-label="Generated AI Research Prompt" />
+              Schema-Strict Prompt (Paste into Claude, Gemini, Grok, ChatGPT, or Muse)
+              <textarea rows={9} readOnly value={generatedPrompt} />
             </label>
           </div>
         </div>

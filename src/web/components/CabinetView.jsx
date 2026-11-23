@@ -1,14 +1,33 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Package, Sparkles, Upload, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import {
+  Package,
+  Sparkles,
+  Upload,
+  AlertTriangle,
+  CheckCircle2,
+  Syringe,
+  Flame,
+  Leaf,
+  Droplets,
+  Layers,
+  ChevronDown,
+} from 'lucide-react';
 import { OWNERSHIP_STATUSES, resolveEffectiveOwnership } from '../../core/index.js';
 import { api } from '../lib/api.js';
 
 const STATUS_META = [
-  { key: 'have', label: 'In Cabinet', tone: 'var(--success)' },
-  { key: 'low_stock', label: 'Low Stock', tone: 'var(--warn)' },
-  { key: 'ordered', label: 'On Order', tone: 'var(--accent)' },
-  { key: 'wishlist', label: 'Wishlist', tone: 'var(--cyan)' },
+  { key: 'have', label: 'In Cabinet', color: 'var(--success)' },
+  { key: 'low_stock', label: 'Low Stock', color: 'var(--warn)' },
+  { key: 'ordered', label: 'On Order', color: 'var(--cyan)' },
+  { key: 'wishlist', label: 'Wishlist', color: 'var(--accent)' },
 ];
+
+const SECTION_ICON = {
+  peptides: { Icon: Syringe, cls: 'sec-peptides' },
+  peds: { Icon: Flame, cls: 'sec-peds' },
+  vitamins_supplements: { Icon: Leaf, cls: 'sec-vitamins_supplements' },
+  dermatology: { Icon: Droplets, cls: 'sec-dermatology' },
+};
 
 export function CabinetView({
   compounds,
@@ -79,7 +98,7 @@ export function CabinetView({
       const res = await api.post('/api/v1/seed/starter', {});
       const added = res.json?.added ?? res.json?.seeded ?? res.json?.compoundsAdded ?? 'starter';
       await onRefresh();
-      setNotice(`Loaded Starter Reference Catalog (${added} reference profiles ready across all 4 sections).`);
+      setNotice(`Loaded Starter Reference Library (${added} profiles ready across all 4 sections).`);
     } catch (err) {
       setErrorMsg(err.message || 'Failed to load starter reference catalog.');
     } finally {
@@ -130,27 +149,20 @@ export function CabinetView({
     }
   };
 
+  const totalDenom = Math.max(1, counts.total);
+
   return (
     <div className="stack-v">
-      <div className="space-between" style={{ alignItems: 'flex-end' }}>
+      <div className="space-between" style={{ alignItems: 'flex-end', paddingTop: '0.2rem' }}>
         <div>
-          <div className="eyebrow">INVENTORY &amp; STOCK</div>
-          <h1 className="display-title" style={{ marginTop: 4 }}>Household Cabinet</h1>
-          <p className="muted" style={{ margin: '0.25rem 0 0' }}>
-            See what you have on hand, track low stock &amp; wishlists, and import from Protocol OS.
+          <div className="eyebrow">INVENTORY &amp; STOCK · {counts.total} TOTAL</div>
+          <h1 className="editorial-title" style={{ marginTop: 6 }}>The Cabinet</h1>
+          <p className="italic-sub" style={{ margin: '0.3rem 0 0' }}>
+            Track household inventory on hand, monitor low stock, and import Protocol OS backups.
           </p>
         </div>
 
         <div className="row-wrap">
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            data-testid="btn-load-starter-catalog"
-            disabled={busy}
-            onClick={handleLoadStarter}
-          >
-            <Sparkles size={14} /> Load Starter Library
-          </button>
           <button
             type="button"
             className="btn btn-sm"
@@ -158,7 +170,16 @@ export function CabinetView({
             disabled={busy}
             onClick={() => fileInputRef.current?.click()}
           >
-            <Upload size={14} /> Import Protocol OS
+            <Upload size={13} strokeWidth={1.8} /> Import Protocol OS
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            data-testid="btn-load-starter-catalog"
+            disabled={busy}
+            onClick={handleLoadStarter}
+          >
+            <Sparkles size={13} strokeWidth={1.8} /> Load Starter Library
           </button>
           <input
             ref={fileInputRef}
@@ -173,135 +194,146 @@ export function CabinetView({
 
       {notice ? (
         <div className="banner-ok" role="status">
-          <CheckCircle2 size={15} style={{ verticalAlign: 'middle', marginRight: 6 }} />
+          <CheckCircle2 size={14} style={{ verticalAlign: 'middle', marginRight: 6 }} />
           {notice}
         </div>
       ) : null}
 
       {errorMsg ? (
         <div className="banner-danger" role="alert">
-          <AlertTriangle size={15} style={{ verticalAlign: 'middle', marginRight: 6 }} />
+          <AlertTriangle size={14} style={{ verticalAlign: 'middle', marginRight: 6 }} />
           {errorMsg}
         </div>
       ) : null}
 
-      {/* Interactive Glass Stat Strip */}
-      <div className="grid-4">
-        {STATUS_META.map(({ key, label, tone }) => {
-          const active = statusFilter === key;
-          return (
-            <button
-              key={key}
-              type="button"
-              className="card"
-              onClick={() => setStatusFilter(active ? 'all' : key)}
-              style={{
-                textAlign: 'left',
-                cursor: 'pointer',
-                borderColor: active ? 'var(--accent-border)' : undefined,
-              }}
-            >
-              <div className="metric-label">{label}</div>
-              <div className="display-sm num" style={{ color: tone, marginTop: 4 }}>
-                {counts[key] || 0}
-              </div>
-              <div className="dim">{active ? 'Filtering · tap to clear' : 'Tap to filter'}</div>
-            </button>
-          );
-        })}
-      </div>
+      {/* Architectural Stock Coverage Bar + 4 Hairline Stat Columns (ZERO nested stat boxes!) */}
+      <section className="atelier-card stack-sm">
+        <div className="space-between">
+          <span className="eyebrow">STOCK COVERAGE</span>
+          <span className="dim mono">{counts.have} of {counts.total} on hand</span>
+        </div>
 
-      {/* Filter Pills */}
-      <div className="section-tabs">
+        <div className="coverage-bar" aria-hidden="true">
+          {STATUS_META.map(({ key, color }) => {
+            const pct = ((counts[key] || 0) / totalDenom) * 100;
+            if (pct <= 0) return null;
+            return <div key={key} className="coverage-seg" style={{ width: `${pct}%`, background: color }} />;
+          })}
+        </div>
+
+        <div className="stat-ribbon" style={{ borderTop: 'none', paddingTop: '0.5rem' }}>
+          {STATUS_META.map(({ key, label, color }) => {
+            const active = statusFilter === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                className="stat-cell interactive"
+                onClick={() => setStatusFilter(active ? 'all' : key)}
+              >
+                <span className="stat-k" style={{ color: active ? color : undefined }}>{label}</span>
+                <span className="stat-v lg" style={{ color }}>{counts[key] || 0}</span>
+                <span className="stat-sub">{active ? 'Filtering · tap to clear' : 'Tap to filter'}</span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Organic Status Filter Pills */}
+      <div className="cat-pills">
         <button
           type="button"
-          className={`tab-btn${statusFilter === 'all' ? ' active' : ''}`}
+          className={`cat-pill${statusFilter === 'all' ? ' active' : ''}`}
           onClick={() => setStatusFilter('all')}
         >
-          All <span className="tab-count">{counts.total}</span>
+          All <span className="pill-num">{counts.total}</span>
         </button>
         {OWNERSHIP_STATUSES.map((st) => (
           <button
             key={st}
             type="button"
-            className={`tab-btn${statusFilter === st ? ' active' : ''}`}
+            className={`cat-pill${statusFilter === st ? ' active' : ''}`}
             onClick={() => setStatusFilter(st)}
           >
-            {st.replace(/_/g, ' ')} <span className="tab-count">{counts[st] || 0}</span>
+            {st.replace(/_/g, ' ')} <span className="pill-num">{counts[st] || 0}</span>
           </button>
         ))}
       </div>
 
-      {/* Cabinet Inventory List */}
-      <div className="stack-v" data-testid="cabinet-list">
+      {/* Sculptural Porcelain Inventory List */}
+      <div data-testid="cabinet-list">
         {items.length === 0 ? (
-          <div className="glass stack-sm" style={{ textAlign: 'center', padding: '2.2rem 1.2rem', alignItems: 'center' }}>
-            <Package size={28} color="var(--accent)" />
+          <div className="atelier-card stack-sm" style={{ textAlign: 'center', padding: '2.6rem 1.4rem', alignItems: 'center' }}>
+            <Package size={26} strokeWidth={1.5} color="var(--accent)" />
             <h2 className="display-sm">
               {(compounds || []).length === 0 ? 'Your Cabinet Is Empty' : 'No Items in This View'}
             </h2>
             <p className="muted" style={{ margin: 0, maxWidth: 440 }}>
               {(compounds || []).length === 0
-                ? 'Load the 26-compound Starter Library, import your Protocol OS export, or add compounds in Library.'
-                : 'Tap All above to view your full household catalog.'}
+                ? 'Load the 26-compound Starter Library or import your Protocol OS export to populate your cabinet.'
+                : 'Select All above to view every item in your household catalog.'}
             </p>
           </div>
         ) : (
-          <div className="grid-2">
+          <div className="list-sheet">
             {items.map(({ compound, own }) => {
               const sec = sectionsById.get(compound.sectionId);
+              const meta = SECTION_ICON[compound.sectionId] || { Icon: Layers, cls: 'sec-custom' };
+              const RowIcon = meta.Icon;
               const lowRunOut =
                 typeof own.remainingDoses === 'number' && Number.isFinite(own.remainingDoses) && own.remainingDoses <= 3;
+
               return (
-                <article key={compound.id} className="card stack-sm">
-                  <div className="space-between" style={{ alignItems: 'flex-start' }}>
-                    <div>
-                      <button
-                        type="button"
-                        onClick={() => onSelectCompound(compound.id)}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          padding: 0,
-                          color: 'var(--text)',
-                          fontWeight: 700,
-                          fontSize: '1rem',
-                          cursor: 'pointer',
-                          textAlign: 'left',
-                        }}
-                      >
-                        {compound.name}
-                      </button>
-                      <div className="dim" style={{ marginTop: 2 }}>
-                        {sec?.name || compound.sectionId}
-                        {compound.dosages?.route ? ` · ${compound.dosages.route}` : ''}
-                        {own.scope === 'household' ? ' · Shared' : ' · Personal'}
-                      </div>
-                    </div>
-                    <span className={`pill pill-${own.status}`}>{own.status.replace(/_/g, ' ')}</span>
+                <article key={compound.id} className="list-row">
+                  <div className={`row-medallion ${meta.cls}`} aria-hidden="true">
+                    <RowIcon size={16} strokeWidth={1.7} />
                   </div>
 
-                  {lowRunOut ? (
-                    <div className="banner-warn" style={{ padding: '0.45rem 0.65rem', fontSize: '0.8rem' }}>
-                      <AlertTriangle size={13} style={{ verticalAlign: 'middle', marginRight: 5 }} />
-                      Low stock: {own.remainingDoses} dose(s) remaining.
+                  <div className="row-body">
+                    <button
+                      type="button"
+                      onClick={() => onSelectCompound(compound.id)}
+                      className="row-title"
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        textAlign: 'left',
+                      }}
+                    >
+                      {compound.name}
+                    </button>
+                    <div className="row-meta">
+                      {[
+                        sec?.name || compound.sectionId,
+                        own.status !== 'dont_have'
+                          ? own.scope === 'household'
+                            ? 'Shared'
+                            : 'Personal'
+                          : compound.dosages?.route || '',
+                        own.remainingDoses != null
+                          ? `${own.remainingDoses} doses left`
+                          : own.quantity != null
+                            ? `Qty ${own.quantity} ${own.unit || ''}`.trim()
+                            : '',
+                        own.expiryDate ? `Exp ${own.expiryDate}` : '',
+                      ]
+                        .filter(Boolean)
+                        .join('  ·  ')}
                     </div>
-                  ) : null}
+                    {lowRunOut ? (
+                      <div className="dim" style={{ color: 'var(--warn)', marginTop: 2 }}>
+                        Low stock: {own.remainingDoses} dose(s) remaining
+                      </div>
+                    ) : null}
+                  </div>
 
-                  <div className="space-between" style={{ paddingTop: '0.35rem', borderTop: '1px solid var(--border-subtle)' }}>
-                    <div className="dim num">
-                      {own.remainingDoses != null
-                        ? `${own.remainingDoses} doses left`
-                        : own.quantity != null
-                          ? `Qty: ${own.quantity} ${own.unit || ''}`
-                          : 'No stock count logged'}
-                      {own.expiryDate ? ` · Exp ${own.expiryDate}` : ''}
-                    </div>
+                  <div className="select-pill">
                     <select
                       aria-label={`Ownership status for ${compound.name}`}
                       value={own.status}
                       onChange={(e) => handleQuickOwnership(compound.id, e.target.value, own.scope)}
-                      style={{ padding: '0.32rem 0.6rem', fontSize: '0.8rem' }}
                     >
                       {OWNERSHIP_STATUSES.map((st) => (
                         <option key={st} value={st}>
@@ -309,6 +341,7 @@ export function CabinetView({
                         </option>
                       ))}
                     </select>
+                    <ChevronDown size={12} strokeWidth={1.8} className="sel-chev" aria-hidden="true" />
                   </div>
                 </article>
               );

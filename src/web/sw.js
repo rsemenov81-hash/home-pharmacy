@@ -1,5 +1,5 @@
 /* Home Pharmacy Service Worker — Offline App-Shell Cache & Web Push Reminders (F39, F41) */
-const CACHE_NAME = 'home-pharmacy-shell-v3';
+const CACHE_NAME = 'home-pharmacy-shell-v4';
 const SHELL_ASSETS = ['./', './index.html', './app.js', './theme.css', './manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {

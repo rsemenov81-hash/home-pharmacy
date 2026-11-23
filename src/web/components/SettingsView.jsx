@@ -1,12 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Users,
-  ShieldCheck,
-  RefreshCw,
   Lock,
   Download,
   Printer,
   RotateCcw,
+  RefreshCw,
   CheckCircle2,
   AlertTriangle,
 } from 'lucide-react';
@@ -118,7 +116,7 @@ export function SettingsView({
     setStatusMsg('');
     try {
       await api.patch(`/api/v1/members/${encodeURIComponent(memberId)}`, {
-        name: draft.name.trim(),
+        name: draft.name,
         routineAnchors: {
           wake: draft.wake,
           breakfast: draft.breakfast,
@@ -129,15 +127,15 @@ export function SettingsView({
         },
         safetyContext: {
           biologicalSexContext: draft.biologicalSexContext,
-          pregnancyOrTrying: Boolean(draft.pregnancyOrTrying),
+          pregnancyOrTrying: draft.pregnancyOrTrying,
           activeRxMeds: draft.activeRxMedsText.split(',').map((s) => s.trim()).filter(Boolean),
           allergies: draft.allergiesText.split(',').map((s) => s.trim()).filter(Boolean),
         },
       });
       await onRefresh();
-      setStatusMsg(`Saved profile for ${draft.name}.`);
+      setStatusMsg(`Saved profile for ${draft.name || memberId}.`);
     } catch (err) {
-      setErrorMsg(err.message || 'Could not save member.');
+      setErrorMsg(err.message || 'Could not save member profile.');
     } finally {
       setBusy(false);
     }
@@ -150,12 +148,15 @@ export function SettingsView({
     setStatusMsg('');
     try {
       await api.patch('/api/v1/household/settings', {
-        aiWritePolicy: { newCompoundMode, verifiedEditMode },
+        aiWritePolicy: {
+          newCompoundMode,
+          verifiedEditMode,
+        },
       });
       await onRefresh();
-      setStatusMsg('Saved AI safety policy.');
+      setStatusMsg('Updated AI governance rules.');
     } catch (err) {
-      setErrorMsg(err.message || 'Could not update policy.');
+      setErrorMsg(err.message || 'Could not update AI rules.');
     } finally {
       setBusy(false);
     }
@@ -163,10 +164,11 @@ export function SettingsView({
 
   const handleExportJson = async () => {
     setErrorMsg('');
+    setStatusMsg('');
     try {
       const res = await api.get('/api/v1/export/hub.json', { rawText: true });
       triggerDownload('home-pharmacy-export.json', res.text, 'application/json');
-      setStatusMsg('Downloaded JSON backup.');
+      setStatusMsg('Exported full household JSON backup.');
     } catch (err) {
       setErrorMsg(err.message || 'JSON export failed.');
     }
@@ -174,10 +176,11 @@ export function SettingsView({
 
   const handleExportCsv = async () => {
     setErrorMsg('');
+    setStatusMsg('');
     try {
       const res = await api.get('/api/v1/export/compounds.csv', { rawText: true });
-      triggerDownload('home-pharmacy-compounds.csv', res.text, 'text/csv;charset=utf-8');
-      setStatusMsg('Downloaded CSV spreadsheet.');
+      triggerDownload('home-pharmacy-catalog.csv', res.text, 'text/csv;charset=utf-8');
+      setStatusMsg('Exported spreadsheet-safe CSV.');
     } catch (err) {
       setErrorMsg(err.message || 'CSV export failed.');
     }
@@ -185,8 +188,19 @@ export function SettingsView({
 
   const handlePrintReport = () => {
     setShowPrintReport(true);
-    if (typeof window !== 'undefined' && typeof window.print === 'function') {
-      window.print();
+    setStatusMsg('Prepared printable household summary report.');
+    try {
+      if (typeof window !== 'undefined' && typeof window.print === 'function') {
+        setTimeout(() => {
+          try {
+            window.print();
+          } catch {
+            // ignore
+          }
+        }, 120);
+      }
+    } catch {
+      // ignore
     }
   };
 
@@ -197,9 +211,9 @@ export function SettingsView({
     try {
       await api.post(`/api/v1/snapshots/${encodeURIComponent(dateKey)}/restore`, {});
       await onRefresh();
-      setStatusMsg(`Restored snapshot from ${dateKey}.`);
+      setStatusMsg(`Restored snapshot ${dateKey}.`);
     } catch (err) {
-      setErrorMsg(err.message || 'Restore failed.');
+      setErrorMsg(err.message || 'Snapshot restore failed.');
     } finally {
       setBusy(false);
     }
@@ -209,11 +223,7 @@ export function SettingsView({
     e.preventDefault();
     setErrorMsg('');
     setStatusMsg('');
-    if (pinInput.trim().length < 4) {
-      setErrorMsg('PIN must be at least 4 characters.');
-      return;
-    }
-    if (pinConfirm && pinConfirm.trim() !== pinInput.trim()) {
+    if (pinConfirm && pinInput !== pinConfirm) {
       setErrorMsg('PIN confirmation does not match.');
       return;
     }
@@ -224,7 +234,7 @@ export function SettingsView({
       setPinConfirm('');
       setStatusMsg('Device PIN lock enabled.');
     } catch (err) {
-      setErrorMsg(err.message || 'Failed to enable PIN.');
+      setErrorMsg(err.message || 'Could not enable PIN.');
     }
   };
 
@@ -236,47 +246,50 @@ export function SettingsView({
 
   return (
     <div className="stack-v">
-      <div>
+      <div style={{ paddingTop: '0.2rem' }}>
         <div className="eyebrow">PREFERENCES &amp; PRIVACY</div>
-        <h1 className="display-title" style={{ marginTop: 4 }}>Settings</h1>
-        <p className="muted" style={{ margin: '0.25rem 0 0' }}>
-          Personalize daily routines, safety checks, backups, and device lock.
+        <h1 className="editorial-title" style={{ marginTop: 6 }}>Settings</h1>
+        <p className="italic-sub" style={{ margin: '0.3rem 0 0' }}>
+          Personalize daily routines, safety checks, backups, and device privacy.
         </p>
       </div>
 
       {statusMsg ? (
         <div className="banner-ok" role="status">
-          <CheckCircle2 size={15} style={{ verticalAlign: 'middle', marginRight: 6 }} />
+          <CheckCircle2 size={14} style={{ verticalAlign: 'middle', marginRight: 6 }} />
           {statusMsg}
         </div>
       ) : null}
 
       {errorMsg ? (
         <div className="banner-danger" role="alert">
-          <AlertTriangle size={15} style={{ verticalAlign: 'middle', marginRight: 6 }} />
+          <AlertTriangle size={14} style={{ verticalAlign: 'middle', marginRight: 6 }} />
           {errorMsg}
         </div>
       ) : null}
 
       {/* 1. Household Members */}
-      <section className="card stack-v" data-testid="settings-members">
-        <div className="row-wrap">
-          <Users size={16} color="var(--accent)" />
-          <div>
-            <div className="eyebrow">HOUSEHOLD PROFILES</div>
-            <h2 className="section-heading">Members, Schedules &amp; Safety Context</h2>
-          </div>
+      <section className="stack-sm" data-testid="settings-members">
+        <div className="section-h">
+          <span>Household Profiles</span>
+          <span className="sh-count">{String((members || []).length).padStart(2, '0')}</span>
         </div>
 
         <div className="grid-2">
           {(members || []).map((m) => {
             const d = memberDrafts[m.id] || {};
             return (
-              <div key={m.id} className="slot-card slot-populated stack-sm">
+              <div key={m.id} className="atelier-card stack-sm">
                 <div className="space-between">
-                  <strong>{m.name}</strong>
-                  <span className="pill pill-accent">{m.role || 'admin'}</span>
+                  <div className="row-wrap" style={{ gap: '0.55rem' }}>
+                    <span className="member-avatar" style={{ width: 28, height: 28 }}>
+                      {(m.name || 'M').charAt(0).toUpperCase()}
+                    </span>
+                    <h2 className="display-sm" style={{ fontSize: '1.35rem' }}>{m.name}</h2>
+                  </div>
+                  <span className="pill mono">{m.role || 'admin'}</span>
                 </div>
+
                 <label className="field-label">
                   Display Name
                   <input
@@ -285,6 +298,7 @@ export function SettingsView({
                     onChange={(e) => updateMemberField(m.id, 'name', e.target.value)}
                   />
                 </label>
+
                 <div className="grid-2">
                   <label className="field-label">
                     Sex Context
@@ -297,7 +311,7 @@ export function SettingsView({
                       <option value="unspecified">Unspecified</option>
                     </select>
                   </label>
-                  <label className={`toggle-chip${d.pregnancyOrTrying ? ' active' : ''}`} style={{ alignSelf: 'end', height: 40 }}>
+                  <label className={`toggle-chip${d.pregnancyOrTrying ? ' active' : ''}`} style={{ alignSelf: 'end', height: 42 }}>
                     <input
                       type="checkbox"
                       checked={Boolean(d.pregnancyOrTrying)}
@@ -306,8 +320,9 @@ export function SettingsView({
                     <span>Pregnancy Guard</span>
                   </label>
                 </div>
+
                 <label className="field-label">
-                  Active Prescription Medications
+                  Active Prescription Meds
                   <input
                     type="text"
                     placeholder="Comma-separated (e.g., Sertraline)"
@@ -315,6 +330,7 @@ export function SettingsView({
                     onChange={(e) => updateMemberField(m.id, 'activeRxMedsText', e.target.value)}
                   />
                 </label>
+
                 <div className="grid-3">
                   <label className="field-label">
                     Wake
@@ -329,7 +345,8 @@ export function SettingsView({
                     <input type="time" value={d.bed || '22:30'} onChange={(e) => updateMemberField(m.id, 'bed', e.target.value)} />
                   </label>
                 </div>
-                <div>
+
+                <div style={{ paddingTop: '0.25rem' }}>
                   <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => handleSaveMember(m.id)}>
                     Save {m.name}
                   </button>
@@ -340,15 +357,13 @@ export function SettingsView({
         </div>
       </section>
 
-      {/* 2. AI Safety Policy */}
-      <section className="card stack-sm" data-testid="settings-ai-policy">
-        <div className="row-wrap">
-          <ShieldCheck size={16} color="var(--accent)" />
-          <div>
-            <div className="eyebrow">AI GOVERNANCE</div>
-            <h2 className="section-heading">AI Write &amp; Verification Rules</h2>
-          </div>
+      {/* 2. AI Governance */}
+      <section className="atelier-card stack-sm" data-testid="settings-ai-policy">
+        <div>
+          <div className="eyebrow">AI GOVERNANCE</div>
+          <h2 className="display-sm" style={{ marginTop: 2 }}>Write &amp; Verification Policy</h2>
         </div>
+
         <form onSubmit={handleSaveAiPolicy} className="stack-sm">
           <div className="grid-2">
             <label className="field-label">
@@ -375,24 +390,21 @@ export function SettingsView({
       </section>
 
       {/* 3. Sync, Exports & Backups */}
-      <section className="card stack-sm" data-testid="settings-sync">
+      <section className="atelier-card stack-sm" data-testid="settings-sync">
         <div className="space-between">
-          <div className="row-wrap">
-            <RefreshCw size={16} color="var(--accent)" />
-            <div>
-              <div className="eyebrow">DATA &amp; SYNC</div>
-              <h2 className="section-heading">Backups, Reports &amp; Cloud Sync</h2>
-            </div>
+          <div>
+            <div className="eyebrow">DATA &amp; SYNC</div>
+            <h2 className="display-sm" style={{ marginTop: 2 }}>Backups &amp; Reports</h2>
           </div>
           <div className="row-wrap">
-            <span className="pill pill-accent">{localMode ? 'Local Browser Mode' : 'Cloud Server'}</span>
-            <span className="pill num">Rev #{rev ?? 0}</span>
+            <span className="pill pill-accent mono">{localMode ? 'Local Mode' : 'Cloud Server'}</span>
+            <span className="pill mono">Rev #{rev ?? 0}</span>
           </div>
         </div>
 
         {localMode ? (
-          <div className="banner-ok" style={{ fontSize: '0.84rem' }}>
-            Running privately in <strong>Local Browser Mode</strong> (saved on this device). Connect a Cloudflare Worker URL below whenever you want live multi-device sync and 5-AI MCP access.
+          <div className="banner-ok" style={{ fontSize: '0.83rem' }}>
+            Running privately in <strong>Local Browser Mode</strong> on this device. Connect a Cloudflare Worker URL below whenever you want live multi-device sync and 5-AI MCP access.
           </div>
         ) : null}
 
@@ -406,24 +418,24 @@ export function SettingsView({
               setStatusMsg('Synced latest data.');
             }}
           >
-            <RefreshCw size={13} /> Sync Now
+            <RefreshCw size={13} strokeWidth={1.8} /> Sync Now
           </button>
           <button type="button" className="btn btn-primary btn-sm" data-testid="btn-export-json" onClick={handleExportJson}>
-            <Download size={13} /> Export JSON
+            <Download size={13} strokeWidth={1.8} /> Export JSON
           </button>
           <button type="button" className="btn btn-sm" data-testid="btn-export-csv" onClick={handleExportCsv}>
-            <Download size={13} /> Export CSV
+            <Download size={13} strokeWidth={1.8} /> Export CSV
           </button>
           <button type="button" className="btn btn-sm" data-testid="btn-print-report" onClick={handlePrintReport}>
-            <Printer size={13} /> Print Report
+            <Printer size={13} strokeWidth={1.8} /> Print Report
           </button>
         </div>
 
-        <details style={{ marginTop: 4 }}>
-          <summary className="dim" style={{ cursor: 'pointer', fontWeight: 600 }}>
+        <details style={{ paddingTop: '0.4rem', borderTop: '1px solid var(--hair-subtle)' }}>
+          <summary className="eyebrow" style={{ cursor: 'pointer' }}>
             Cloud Server URL &amp; Snapshots
           </summary>
-          <div className="stack-sm" style={{ marginTop: '0.65rem' }}>
+          <div className="stack-sm" style={{ marginTop: '0.75rem' }}>
             <div className="row-wrap" style={{ alignItems: 'flex-end' }}>
               <label className="field-label" style={{ flex: '1 1 240px' }}>
                 Cloudflare Worker / Server URL
@@ -467,28 +479,25 @@ export function SettingsView({
       </section>
 
       {/* 4. Device PIN Lock */}
-      <section className="card stack-sm" data-testid="settings-pin-lock">
+      <section className="atelier-card stack-sm" data-testid="settings-pin-lock">
         <div className="space-between">
-          <div className="row-wrap">
-            <Lock size={16} color="var(--accent)" />
-            <div>
-              <div className="eyebrow">PRIVACY SHIELD</div>
-              <h2 className="section-heading">Device PIN Lock</h2>
-            </div>
+          <div>
+            <div className="eyebrow">PRIVACY SHIELD</div>
+            <h2 className="display-sm" style={{ marginTop: 2 }}>Device PIN Lock</h2>
           </div>
-          <span className={`pill ${pinCfg?.enabled ? 'pill-verified' : ''}`}>
+          <span className={`pill mono ${pinCfg?.enabled ? 'pill-verified' : ''}`}>
             {pinCfg?.enabled ? 'Enabled' : 'Off'}
           </span>
         </div>
 
         <p className="muted" style={{ margin: 0 }}>
-          Lock Home Pharmacy on this device with a local PIN (5 consecutive wrong tries trigger a 30-second lockout).
+          Lock Home Pharmacy on this device with a local PIN (5 consecutive wrong attempts trigger a 30-second lockout).
         </p>
 
         {pinCfg?.enabled ? (
           <div className="row-wrap">
             <button type="button" className="btn btn-primary btn-sm" onClick={onLockNow}>
-              <Lock size={13} /> Lock Now
+              <Lock size={13} strokeWidth={1.8} /> Lock Now
             </button>
             <button type="button" className="btn btn-danger btn-sm" onClick={handleDisablePin}>
               Disable PIN
@@ -528,12 +537,12 @@ export function SettingsView({
 
       {/* Printable Report */}
       {showPrintReport ? (
-        <article className="card stack-sm">
+        <article className="atelier-card stack-sm">
           <div className="space-between">
             <h2 className="display-sm">Home Pharmacy — Summary Report</h2>
             <button type="button" className="btn btn-sm no-print" onClick={() => setShowPrintReport(false)}>Hide</button>
           </div>
-          <div className="banner-warn" style={{ fontSize: '0.84rem' }}>
+          <div className="banner-warn" style={{ fontSize: '0.83rem' }}>
             <strong>Medical &amp; Harm-Reduction Disclaimer:</strong> Personal reference report only — not medical advice. Consult a qualified clinician for medical decisions and lab panels.
           </div>
           <div className="muted">

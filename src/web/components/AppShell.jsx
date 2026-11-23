@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import {
-  Layers,
+  BookOpen,
   CalendarClock,
   Package,
   Sparkles,
-  Settings,
+  SlidersHorizontal,
   Sun,
   Moon,
   Lock,
@@ -31,22 +31,23 @@ export function AuthGate({ onConnect, authError }) {
 
   return (
     <div className="auth-screen">
-      <main className="glass auth-card stack-v">
-        <div className="row-wrap">
-          <span className="brand-mark">❖</span>
-          <div>
-            <div className="eyebrow">HOME PHARMACY</div>
-            <h1 className="display-sm" style={{ marginTop: 2 }}>Unlock Your Hub</h1>
-          </div>
+      <main className="atelier-card auth-card stack-v">
+        <div>
+          <div className="eyebrow">HOME PHARMACY</div>
+          <h1 className="editorial-title" style={{ fontSize: '2.1rem', marginTop: 6 }}>
+            Unlock Apothecary
+          </h1>
+          <p className="muted" style={{ margin: '0.45rem 0 0' }}>
+            Enter your Household Access Token or scoped API key to open your private protocol hub.
+          </p>
         </div>
-        <p className="muted" style={{ margin: 0 }}>
-          Enter your Household Access Token or scoped API key to open your private protocol hub.
-        </p>
+
         {authError ? (
           <div className="banner-danger" role="alert">
             {authError}
           </div>
         ) : null}
+
         <form onSubmit={handleSubmit} className="stack-v">
           <label className="field-label" htmlFor="auth-token-input">
             Access Token
@@ -62,9 +63,10 @@ export function AuthGate({ onConnect, authError }) {
             />
           </label>
           <button type="submit" className="btn btn-primary" disabled={busy}>
-            <Lock size={15} /> {busy ? 'Unlocking…' : 'Sign In & Unlock'}
+            <Lock size={14} strokeWidth={1.8} /> {busy ? 'Unlocking…' : 'Sign In & Unlock'}
           </button>
         </form>
+
         <p className="dim" style={{ margin: 0, textAlign: 'center' }}>
           Personal reference tool only — not medical advice.
         </p>
@@ -93,21 +95,20 @@ export function PinLockOverlay({ onUnlocked }) {
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Device PIN Lock">
       <div className="modal-card stack-v" style={{ maxWidth: 380 }}>
-        <div className="row-wrap">
-          <span className="brand-mark"><Lock size={15} /></span>
-          <div>
-            <div className="eyebrow">PRIVACY SHIELD</div>
-            <h2 className="display-sm">Device Locked</h2>
-          </div>
+        <div>
+          <div className="eyebrow">PRIVACY SHIELD</div>
+          <h2 className="display-sm" style={{ marginTop: 4 }}>Device Locked</h2>
+          <p className="muted" style={{ margin: '0.35rem 0 0' }}>
+            Enter your device PIN to unlock Home Pharmacy.
+          </p>
         </div>
-        <p className="muted" style={{ margin: 0 }}>
-          Enter your device PIN to unlock Home Pharmacy.
-        </p>
+
         {errorMsg ? (
           <div className="banner-danger" role="alert">
             {errorMsg}
           </div>
         ) : null}
+
         <form onSubmit={handleUnlock} className="stack-v">
           <label className="field-label" htmlFor="pin-unlock-input">
             Device PIN
@@ -147,39 +148,42 @@ export function AppShell({
   children,
 }) {
   const navItems = [
-    { id: 'sections', testId: 'nav-sections', label: 'Library', Icon: Layers },
+    { id: 'sections', testId: 'nav-sections', label: 'Library', Icon: BookOpen },
     { id: 'stack', testId: 'nav-stack', label: 'Stack', Icon: CalendarClock },
     { id: 'cabinet', testId: 'nav-cabinet', label: 'Cabinet', Icon: Package },
     { id: 'ai-hub', testId: 'nav-ai-hub', label: 'AI Hub', Icon: Sparkles, badge: pendingProposalCount },
-    { id: 'settings', testId: 'nav-settings', label: 'Settings', Icon: Settings },
+    { id: 'settings', testId: 'nav-settings', label: 'Settings', Icon: SlidersHorizontal },
   ];
+
+  const activeMember = (members || []).find((m) => m.id === activeMemberId) || (members || [])[0];
+  const initial = (activeMember?.name || 'H').trim().charAt(0).toUpperCase();
 
   return (
     <div className="app-shell">
       <header className="topbar">
         <div className="topbar-inner">
-          <div className="brand">
-            <span className="brand-mark" aria-hidden="true">❖</span>
-            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
-              <span>Home Pharmacy</span>
-              <span className="brand-sub">Household OS</span>
-            </div>
-          </div>
-
-          <div className="topbar-controls">
+          <div className="topbar-left">
             <div className="search-wrap">
-              <Search size={14} className="search-icon" aria-hidden="true" />
+              <Search size={13} strokeWidth={1.8} className="search-icon" aria-hidden="true" />
               <input
                 type="text"
                 data-testid="global-search-input"
                 aria-label="Search compounds across all sections"
-                placeholder="Search compounds, aliases…"
+                placeholder="Search library…"
                 value={searchQuery}
                 onChange={(e) => onSearchChange(e.target.value)}
               />
             </div>
+          </div>
 
-            <div className="member-pill">
+          <div className="topbar-center">
+            <span className="brand-dot" aria-hidden="true" />
+            <span className="brand-wordmark">Home Pharmacy</span>
+          </div>
+
+          <div className="topbar-right">
+            <div className="member-capsule">
+              <span className="member-avatar" aria-hidden="true">{initial}</span>
               <select
                 className="member-select"
                 data-testid="member-switcher"
@@ -193,27 +197,27 @@ export function AppShell({
                   </option>
                 ))}
               </select>
-              <ChevronDown size={13} className="member-chevron" aria-hidden="true" />
+              <ChevronDown size={12} strokeWidth={1.8} className="member-chevron" aria-hidden="true" />
             </div>
 
             <button
               type="button"
-              className="btn btn-icon"
+              className="theme-btn"
               data-testid="theme-toggle"
               aria-label="Toggle dark and light theme"
               onClick={onToggleTheme}
-              title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} appearance`}
+              title={`Switch to ${theme === 'dark' ? 'light porcelain' : 'dark obsidian'} theme`}
             >
-              {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+              {theme === 'dark' ? <Sun size={14} strokeWidth={1.8} /> : <Moon size={14} strokeWidth={1.8} />}
             </button>
           </div>
         </div>
       </header>
 
       {offline ? (
-        <div style={{ maxWidth: 1120, width: '100%', margin: '0.75rem auto 0', padding: '0 1rem' }}>
+        <div style={{ maxWidth: 840, width: '100%', margin: '0.85rem auto 0', padding: '0 1.25rem' }}>
           <div className="banner-warn row-wrap" role="status">
-            <WifiOff size={15} />
+            <WifiOff size={14} strokeWidth={1.8} />
             <span>Offline — viewing cached household data.</span>
           </div>
         </div>
@@ -235,7 +239,7 @@ export function AppShell({
               className={`nav-btn${activeTab === id ? ' active' : ''}`}
               onClick={() => onTabChange(id)}
             >
-              <Icon size={18} strokeWidth={activeTab === id ? 2.2 : 1.8} />
+              <Icon size={18} strokeWidth={activeTab === id ? 2 : 1.6} />
               <span>{label}</span>
               {badge > 0 ? <span className="badge-count">{badge}</span> : null}
             </button>
