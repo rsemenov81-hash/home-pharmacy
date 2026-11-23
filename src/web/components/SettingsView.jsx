@@ -25,7 +25,7 @@ function triggerDownload(filename, content, mimeType) {
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   } catch {
-    // ignore download errors in restricted environments
+    // ignore download errors
   }
 }
 
@@ -35,7 +35,6 @@ export function SettingsView({
   rev,
   compounds,
   localMode = false,
-  onConnectRemote,
   onRefresh,
   onLockNow,
 }) {
@@ -50,12 +49,9 @@ export function SettingsView({
   const [pushConfig, setPushConfig] = useState(null);
   const [serverUrl, setServerUrl] = useState(() => getApiBaseUrl());
 
-  // PIN lock state
   const [pinCfg, setPinCfg] = useState(() => getPinConfig());
   const [pinInput, setPinInput] = useState('');
   const [pinConfirm, setPinConfirm] = useState('');
-
-  // Print preview modal/article
   const [showPrintReport, setShowPrintReport] = useState(false);
 
   const [statusMsg, setStatusMsg] = useState('');
@@ -134,20 +130,14 @@ export function SettingsView({
         safetyContext: {
           biologicalSexContext: draft.biologicalSexContext,
           pregnancyOrTrying: Boolean(draft.pregnancyOrTrying),
-          activeRxMeds: draft.activeRxMedsText
-            .split(',')
-            .map((s) => s.trim())
-            .filter(Boolean),
-          allergies: draft.allergiesText
-            .split(',')
-            .map((s) => s.trim())
-            .filter(Boolean),
+          activeRxMeds: draft.activeRxMedsText.split(',').map((s) => s.trim()).filter(Boolean),
+          allergies: draft.allergiesText.split(',').map((s) => s.trim()).filter(Boolean),
         },
       });
       await onRefresh();
-      setStatusMsg(`Saved household member "${draft.name}".`);
+      setStatusMsg(`Saved profile for ${draft.name}.`);
     } catch (err) {
-      setErrorMsg(err.message || 'Failed to update member.');
+      setErrorMsg(err.message || 'Could not save member.');
     } finally {
       setBusy(false);
     }
@@ -160,15 +150,12 @@ export function SettingsView({
     setStatusMsg('');
     try {
       await api.patch('/api/v1/household/settings', {
-        aiWritePolicy: {
-          newCompoundMode,
-          verifiedEditMode,
-        },
+        aiWritePolicy: { newCompoundMode, verifiedEditMode },
       });
       await onRefresh();
-      setStatusMsg('Updated AI Write Policy.');
+      setStatusMsg('Saved AI safety policy.');
     } catch (err) {
-      setErrorMsg(err.message || 'Failed to save AI Write Policy.');
+      setErrorMsg(err.message || 'Could not update policy.');
     } finally {
       setBusy(false);
     }
@@ -179,7 +166,7 @@ export function SettingsView({
     try {
       const res = await api.get('/api/v1/export/hub.json', { rawText: true });
       triggerDownload('home-pharmacy-export.json', res.text, 'application/json');
-      setStatusMsg('Exported Home Pharmacy JSON backup (zero secrets).');
+      setStatusMsg('Downloaded JSON backup.');
     } catch (err) {
       setErrorMsg(err.message || 'JSON export failed.');
     }
@@ -190,7 +177,7 @@ export function SettingsView({
     try {
       const res = await api.get('/api/v1/export/compounds.csv', { rawText: true });
       triggerDownload('home-pharmacy-compounds.csv', res.text, 'text/csv;charset=utf-8');
-      setStatusMsg('Exported formula-safe Compounds CSV.');
+      setStatusMsg('Downloaded CSV spreadsheet.');
     } catch (err) {
       setErrorMsg(err.message || 'CSV export failed.');
     }
@@ -210,9 +197,9 @@ export function SettingsView({
     try {
       await api.post(`/api/v1/snapshots/${encodeURIComponent(dateKey)}/restore`, {});
       await onRefresh();
-      setStatusMsg(`Restored snapshot ${dateKey}.`);
+      setStatusMsg(`Restored snapshot from ${dateKey}.`);
     } catch (err) {
-      setErrorMsg(err.message || 'Snapshot restore failed.');
+      setErrorMsg(err.message || 'Restore failed.');
     } finally {
       setBusy(false);
     }
@@ -235,9 +222,9 @@ export function SettingsView({
       setPinCfg(cfg);
       setPinInput('');
       setPinConfirm('');
-      setStatusMsg('Device PIN lock enabled (salted SHA-256 + 5-fail 30s lockout).');
+      setStatusMsg('Device PIN lock enabled.');
     } catch (err) {
-      setErrorMsg(err.message || 'Failed to enable PIN lock.');
+      setErrorMsg(err.message || 'Failed to enable PIN.');
     }
   };
 
@@ -250,9 +237,10 @@ export function SettingsView({
   return (
     <div className="stack-v">
       <div>
-        <h1 style={{ margin: 0, fontSize: '1.45rem' }}>Household Settings, Sync & Security</h1>
-        <p className="muted" style={{ margin: '0.2rem 0 0' }}>
-          Manage spouse profiles, safety contexts, AI governance policy, backups/exports, and device PIN privacy lock.
+        <div className="eyebrow">PREFERENCES &amp; PRIVACY</div>
+        <h1 className="display-title" style={{ marginTop: 4 }}>Settings</h1>
+        <p className="muted" style={{ margin: '0.25rem 0 0' }}>
+          Personalize daily routines, safety checks, backups, and device lock.
         </p>
       </div>
 
@@ -270,23 +258,24 @@ export function SettingsView({
         </div>
       ) : null}
 
-      {/* 1. Household Members & Safety Context */}
+      {/* 1. Household Members */}
       <section className="card stack-v" data-testid="settings-members">
         <div className="row-wrap">
-          <Users size={17} color="var(--gold)" />
-          <h2 style={{ margin: 0, fontSize: '1.12rem', color: 'var(--gold)' }}>
-            Household Members & Safety Context
-          </h2>
+          <Users size={16} color="var(--accent)" />
+          <div>
+            <div className="eyebrow">HOUSEHOLD PROFILES</div>
+            <h2 className="section-heading">Members, Schedules &amp; Safety Context</h2>
+          </div>
         </div>
 
         <div className="grid-2">
           {(members || []).map((m) => {
             const d = memberDrafts[m.id] || {};
             return (
-              <div key={m.id} className="slot-card stack-v">
+              <div key={m.id} className="slot-card slot-populated stack-sm">
                 <div className="space-between">
                   <strong>{m.name}</strong>
-                  <span className="pill">{m.role || 'admin'}</span>
+                  <span className="pill pill-accent">{m.role || 'admin'}</span>
                 </div>
                 <label className="field-label">
                   Display Name
@@ -298,30 +287,30 @@ export function SettingsView({
                 </label>
                 <div className="grid-2">
                   <label className="field-label">
-                    Biological Sex Context
+                    Sex Context
                     <select
                       value={d.biologicalSexContext || 'unspecified'}
                       onChange={(e) => updateMemberField(m.id, 'biologicalSexContext', e.target.value)}
                     >
-                      <option value="female">female</option>
-                      <option value="male">male</option>
-                      <option value="unspecified">unspecified</option>
+                      <option value="female">Female</option>
+                      <option value="male">Male</option>
+                      <option value="unspecified">Unspecified</option>
                     </select>
                   </label>
-                  <label className="row-wrap" style={{ fontSize: '0.84rem', marginTop: '1.3rem' }}>
+                  <label className={`toggle-chip${d.pregnancyOrTrying ? ' active' : ''}`} style={{ alignSelf: 'end', height: 40 }}>
                     <input
                       type="checkbox"
                       checked={Boolean(d.pregnancyOrTrying)}
                       onChange={(e) => updateMemberField(m.id, 'pregnancyOrTrying', e.target.checked)}
                     />
-                    <span>Pregnancy / Trying (Teratogen Guard)</span>
+                    <span>Pregnancy Guard</span>
                   </label>
                 </div>
                 <label className="field-label">
-                  Active Rx Medications (comma-separated)
+                  Active Prescription Medications
                   <input
                     type="text"
-                    placeholder="e.g., Sertraline, Nitrates"
+                    placeholder="Comma-separated (e.g., Sertraline)"
                     value={d.activeRxMedsText ?? ''}
                     onChange={(e) => updateMemberField(m.id, 'activeRxMedsText', e.target.value)}
                   />
@@ -329,118 +318,83 @@ export function SettingsView({
                 <div className="grid-3">
                   <label className="field-label">
                     Wake
-                    <input
-                      type="time"
-                      value={d.wake || '07:00'}
-                      onChange={(e) => updateMemberField(m.id, 'wake', e.target.value)}
-                    />
+                    <input type="time" value={d.wake || '07:00'} onChange={(e) => updateMemberField(m.id, 'wake', e.target.value)} />
                   </label>
                   <label className="field-label">
                     Workout
-                    <input
-                      type="time"
-                      value={d.workout || '06:30'}
-                      onChange={(e) => updateMemberField(m.id, 'workout', e.target.value)}
-                    />
+                    <input type="time" value={d.workout || '06:30'} onChange={(e) => updateMemberField(m.id, 'workout', e.target.value)} />
                   </label>
                   <label className="field-label">
-                    Bed
-                    <input
-                      type="time"
-                      value={d.bed || '22:30'}
-                      onChange={(e) => updateMemberField(m.id, 'bed', e.target.value)}
-                    />
+                    Bedtime
+                    <input type="time" value={d.bed || '22:30'} onChange={(e) => updateMemberField(m.id, 'bed', e.target.value)} />
                   </label>
                 </div>
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  disabled={busy}
-                  onClick={() => handleSaveMember(m.id)}
-                >
-                  Save {m.name}
-                </button>
+                <div>
+                  <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => handleSaveMember(m.id)}>
+                    Save {m.name}
+                  </button>
+                </div>
               </div>
             );
           })}
         </div>
       </section>
 
-      {/* 2. AI Governance & Write Policy */}
-      <section className="card stack-v" data-testid="settings-ai-policy">
+      {/* 2. AI Safety Policy */}
+      <section className="card stack-sm" data-testid="settings-ai-policy">
         <div className="row-wrap">
-          <ShieldCheck size={17} color="var(--gold)" />
-          <h2 style={{ margin: 0, fontSize: '1.12rem', color: 'var(--gold)' }}>
-            AI Write Policy & Verification Guardrails
-          </h2>
+          <ShieldCheck size={16} color="var(--accent)" />
+          <div>
+            <div className="eyebrow">AI GOVERNANCE</div>
+            <h2 className="section-heading">AI Write &amp; Verification Rules</h2>
+          </div>
         </div>
-        <form onSubmit={handleSaveAiPolicy} className="stack-v">
+        <form onSubmit={handleSaveAiPolicy} className="stack-sm">
           <div className="grid-2">
             <label className="field-label">
-              New AI-Researched Compounds
+              When an AI adds a new compound
               <select value={newCompoundMode} onChange={(e) => setNewCompoundMode(e.target.value)}>
-                <option value="auto_publish_ai_draft">Auto-publish as ai_draft (1-tap Verify)</option>
-                <option value="hold_in_inbox">Hold in Proposals Inbox for review</option>
+                <option value="auto_publish_ai_draft">Save as AI Draft (1-tap Verify)</option>
+                <option value="hold_in_inbox">Hold in Proposals Inbox first</option>
               </select>
             </label>
             <label className="field-label">
-              AI Edits to Verified Profiles
+              When an AI edits a verified profile
               <select value={verifiedEditMode} onChange={(e) => setVerifiedEditMode(e.target.value)}>
-                <option value="always_propose">Always route to Proposals Inbox (never silent overwrite)</option>
+                <option value="always_propose">Always send to Proposals Inbox</option>
                 <option value="allow_blank_fill">Allow filling blank fields only</option>
               </select>
             </label>
           </div>
           <div>
             <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>
-              Save AI Policy
+              Save Rules
             </button>
           </div>
         </form>
       </section>
 
-      {/* 3. Sync, Snapshots & Multi-Format Export */}
-      <section className="card stack-v" data-testid="settings-sync">
+      {/* 3. Sync, Exports & Backups */}
+      <section className="card stack-sm" data-testid="settings-sync">
         <div className="space-between">
           <div className="row-wrap">
-            <RefreshCw size={17} color="var(--gold)" />
-            <h2 style={{ margin: 0, fontSize: '1.12rem', color: 'var(--gold)' }}>
-              Cloud Sync, Snapshots & Multi-Format Export
-            </h2>
+            <RefreshCw size={16} color="var(--accent)" />
+            <div>
+              <div className="eyebrow">DATA &amp; SYNC</div>
+              <h2 className="section-heading">Backups, Reports &amp; Cloud Sync</h2>
+            </div>
           </div>
           <div className="row-wrap">
-            <span className="pill">{localMode ? 'Local Browser Mode' : 'Cloud / Server Mode'}</span>
-            <span className="pill num">Revision #{rev ?? 0}</span>
+            <span className="pill pill-accent">{localMode ? 'Local Browser Mode' : 'Cloud Server'}</span>
+            <span className="pill num">Rev #{rev ?? 0}</span>
           </div>
         </div>
 
         {localMode ? (
           <div className="banner-ok" style={{ fontSize: '0.84rem' }}>
-            Running privately in <strong>Local Browser Mode</strong> (saved in this browser). Everything works offline with zero server setup. To enable cross-device sync and live Gemini/Claude/Grok/GPT/Muse MCP access, deploy the Cloudflare Worker (see <code>DEPLOY.md</code>) and enter your Worker URL below.
+            Running privately in <strong>Local Browser Mode</strong> (saved on this device). Connect a Cloudflare Worker URL below whenever you want live multi-device sync and 5-AI MCP access.
           </div>
         ) : null}
-
-        <div className="row-wrap" style={{ alignItems: 'flex-end' }}>
-          <label className="field-label" style={{ flex: '1 1 260px' }}>
-            Hub Server URL (local or Cloudflare Worker)
-            <input
-              type="url"
-              placeholder="https://home-pharmacy-hub.<subdomain>.workers.dev"
-              value={serverUrl}
-              onChange={(e) => setServerUrl(e.target.value)}
-            />
-          </label>
-          <button
-            type="button"
-            className="btn btn-sm"
-            onClick={() => {
-              setApiBaseUrl(serverUrl);
-              setStatusMsg('Updated Hub Server URL.');
-            }}
-          >
-            Save URL
-          </button>
-        </div>
 
         <div className="row-wrap">
           <button
@@ -449,87 +403,92 @@ export function SettingsView({
             onClick={async () => {
               await onRefresh();
               await loadAux();
-              setStatusMsg('Synced latest household state from server.');
+              setStatusMsg('Synced latest data.');
             }}
           >
-            <RefreshCw size={14} /> Sync Now
+            <RefreshCw size={13} /> Sync Now
           </button>
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            data-testid="btn-export-json"
-            onClick={handleExportJson}
-          >
-            <Download size={14} /> Export JSON
+          <button type="button" className="btn btn-primary btn-sm" data-testid="btn-export-json" onClick={handleExportJson}>
+            <Download size={13} /> Export JSON
           </button>
-          <button
-            type="button"
-            className="btn btn-sm"
-            data-testid="btn-export-csv"
-            onClick={handleExportCsv}
-          >
-            <Download size={14} /> Export CSV
+          <button type="button" className="btn btn-sm" data-testid="btn-export-csv" onClick={handleExportCsv}>
+            <Download size={13} /> Export CSV
           </button>
-          <button
-            type="button"
-            className="btn btn-sm"
-            data-testid="btn-print-report"
-            onClick={handlePrintReport}
-          >
-            <Printer size={14} /> Print Report
+          <button type="button" className="btn btn-sm" data-testid="btn-print-report" onClick={handlePrintReport}>
+            <Printer size={13} /> Print Report
           </button>
         </div>
 
-        {pushConfig ? (
-          <div className="muted" style={{ fontSize: '0.82rem' }}>
-            Web Push Reminders: {pushConfig.enabled ? 'Enabled' : 'Available (configure VAPID keys to activate)'}
-          </div>
-        ) : null}
-
-        {snapshots.length > 0 ? (
-          <div className="stack-v">
-            <h3 style={{ margin: 0, fontSize: '0.96rem' }}>Daily Point-in-Time Snapshots</h3>
-            <div className="row-wrap">
-              {snapshots.slice(0, 10).map((s) => {
-                const dk = typeof s === 'string' ? s : s.dateKey || s.id;
-                return (
-                  <button
-                    key={dk}
-                    type="button"
-                    className="btn btn-sm"
-                    disabled={busy}
-                    onClick={() => handleRestoreSnapshot(dk)}
-                  >
-                    <RotateCcw size={13} /> Restore {dk}
-                  </button>
-                );
-              })}
+        <details style={{ marginTop: 4 }}>
+          <summary className="dim" style={{ cursor: 'pointer', fontWeight: 600 }}>
+            Cloud Server URL &amp; Snapshots
+          </summary>
+          <div className="stack-sm" style={{ marginTop: '0.65rem' }}>
+            <div className="row-wrap" style={{ alignItems: 'flex-end' }}>
+              <label className="field-label" style={{ flex: '1 1 240px' }}>
+                Cloudflare Worker / Server URL
+                <input
+                  type="url"
+                  placeholder="https://home-pharmacy-hub.<subdomain>.workers.dev"
+                  value={serverUrl}
+                  onChange={(e) => setServerUrl(e.target.value)}
+                />
+              </label>
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={() => {
+                  setApiBaseUrl(serverUrl);
+                  setStatusMsg('Updated server URL.');
+                }}
+              >
+                Save URL
+              </button>
             </div>
+            {pushConfig ? (
+              <div className="dim">
+                Web Push Reminders: {pushConfig.enabled ? 'Enabled' : 'Ready when VAPID keys are configured'}
+              </div>
+            ) : null}
+            {snapshots.length > 0 ? (
+              <div className="row-wrap">
+                {snapshots.slice(0, 8).map((s) => {
+                  const dk = typeof s === 'string' ? s : s.dateKey || s.id;
+                  return (
+                    <button key={dk} type="button" className="btn btn-sm" disabled={busy} onClick={() => handleRestoreSnapshot(dk)}>
+                      <RotateCcw size={12} /> Restore {dk}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
           </div>
-        ) : null}
+        </details>
       </section>
 
-      {/* 4. Device PIN Lock (Salted SHA-256 + 5-Fail 30s Lockout) */}
-      <section className="card stack-v" data-testid="settings-pin-lock">
+      {/* 4. Device PIN Lock */}
+      <section className="card stack-sm" data-testid="settings-pin-lock">
         <div className="space-between">
           <div className="row-wrap">
-            <Lock size={17} color="var(--gold)" />
-            <h2 style={{ margin: 0, fontSize: '1.12rem', color: 'var(--gold)' }}>
-              Device PIN Lock (Privacy Shield)
-            </h2>
+            <Lock size={16} color="var(--accent)" />
+            <div>
+              <div className="eyebrow">PRIVACY SHIELD</div>
+              <h2 className="section-heading">Device PIN Lock</h2>
+            </div>
           </div>
           <span className={`pill ${pinCfg?.enabled ? 'pill-verified' : ''}`}>
-            {pinCfg?.enabled ? 'PIN Lock Enabled' : 'Disabled'}
+            {pinCfg?.enabled ? 'Enabled' : 'Off'}
           </span>
         </div>
+
         <p className="muted" style={{ margin: 0 }}>
-          Protect this device with a local salted SHA-256 PIN lock. Five consecutive incorrect attempts trigger a 30-second lockout.
+          Lock Home Pharmacy on this device with a local PIN (5 consecutive wrong tries trigger a 30-second lockout).
         </p>
 
         {pinCfg?.enabled ? (
           <div className="row-wrap">
             <button type="button" className="btn btn-primary btn-sm" onClick={onLockNow}>
-              <Lock size={14} /> Lock Now
+              <Lock size={13} /> Lock Now
             </button>
             <button type="button" className="btn btn-danger btn-sm" onClick={handleDisablePin}>
               Disable PIN
@@ -538,7 +497,7 @@ export function SettingsView({
         ) : (
           <form onSubmit={handleEnablePin} className="row-wrap" style={{ alignItems: 'flex-end' }}>
             <label className="field-label">
-              New Device PIN
+              New PIN
               <input
                 type="password"
                 inputMode="numeric"
@@ -567,25 +526,23 @@ export function SettingsView({
         )}
       </section>
 
-      {/* Printable Report Section */}
+      {/* Printable Report */}
       {showPrintReport ? (
-        <article className="card stack-v">
+        <article className="card stack-sm">
           <div className="space-between">
-            <h2 style={{ margin: 0, color: 'var(--gold)' }}>Home Pharmacy — Printable Summary Report</h2>
-            <button type="button" className="btn btn-sm no-print" onClick={() => setShowPrintReport(false)}>
-              Hide Preview
-            </button>
+            <h2 className="display-sm">Home Pharmacy — Summary Report</h2>
+            <button type="button" className="btn btn-sm no-print" onClick={() => setShowPrintReport(false)}>Hide</button>
           </div>
-          <div className="banner-warn">
-            <strong>Medical & Harm-Reduction Disclaimer:</strong> Personal reference report only — not medical advice. Review all compounds, dosages, and lab panels with a qualified healthcare clinician.
+          <div className="banner-warn" style={{ fontSize: '0.84rem' }}>
+            <strong>Medical &amp; Harm-Reduction Disclaimer:</strong> Personal reference report only — not medical advice. Consult a qualified clinician for medical decisions and lab panels.
           </div>
-          <p className="muted" style={{ margin: 0 }}>
-            Members: {(members || []).map((m) => m.name).join(', ')} • Total Catalog Compounds: {(compounds || []).length}
-          </p>
-          <ul style={{ margin: 0, paddingLeft: '1.2rem' }}>
+          <div className="muted">
+            Members: {(members || []).map((m) => m.name).join(', ')} · Total Compounds: {(compounds || []).length}
+          </div>
+          <ul style={{ margin: 0, paddingLeft: '1.15rem' }}>
             {(compounds || []).map((c) => (
-              <li key={c.id}>
-                <strong>{c.name}</strong> ({c.sectionId}) — {c.dosages?.rangeText || 'See profile'} • {c.summary}
+              <li key={c.id} style={{ marginBottom: 4 }}>
+                <strong>{c.name}</strong> ({c.sectionId}) — {c.dosages?.rangeText || 'See profile'} · {c.summary}
               </li>
             ))}
           </ul>

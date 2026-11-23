@@ -3,6 +3,13 @@ import { Package, Sparkles, Upload, AlertTriangle, CheckCircle2 } from 'lucide-r
 import { OWNERSHIP_STATUSES, resolveEffectiveOwnership } from '../../core/index.js';
 import { api } from '../lib/api.js';
 
+const STATUS_META = [
+  { key: 'have', label: 'In Cabinet', tone: 'var(--success)' },
+  { key: 'low_stock', label: 'Low Stock', tone: 'var(--warn)' },
+  { key: 'ordered', label: 'On Order', tone: 'var(--accent)' },
+  { key: 'wishlist', label: 'Wishlist', tone: 'var(--cyan)' },
+];
+
 export function CabinetView({
   compounds,
   sections,
@@ -72,7 +79,7 @@ export function CabinetView({
       const res = await api.post('/api/v1/seed/starter', {});
       const added = res.json?.added ?? res.json?.seeded ?? res.json?.compoundsAdded ?? 'starter';
       await onRefresh();
-      setNotice(`Loaded Starter Reference Catalog (${added} reference profiles available across all 4 sections).`);
+      setNotice(`Loaded Starter Reference Catalog (${added} reference profiles ready across all 4 sections).`);
     } catch (err) {
       setErrorMsg(err.message || 'Failed to load starter reference catalog.');
     } finally {
@@ -92,7 +99,7 @@ export function CabinetView({
       );
       await onRefresh();
       const imported = res.json?.importedCompounds ?? res.json?.compoundsAdded ?? res.json?.protocolsImported ?? 'records';
-      setNotice(`Imported Protocol OS export successfully (${imported}).`);
+      setNotice(`Imported Protocol OS export (${imported}).`);
       setShowPasteModal(false);
       setPasteText('');
     } catch (err) {
@@ -119,19 +126,21 @@ export function CabinetView({
       });
       await onRefresh();
     } catch (err) {
-      setErrorMsg(err.message || 'Failed to update ownership status.');
+      setErrorMsg(err.message || 'Could not update ownership.');
     }
   };
 
   return (
     <div className="stack-v">
-      <div className="space-between">
+      <div className="space-between" style={{ alignItems: 'flex-end' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: '1.45rem' }}>Household Cabinet & Inventory</h1>
-          <p className="muted" style={{ margin: '0.2rem 0 0' }}>
-            Track shared household stock vs. personal compounds, run-out alerts, starter reference data, and Protocol OS imports.
+          <div className="eyebrow">INVENTORY &amp; STOCK</div>
+          <h1 className="display-title" style={{ marginTop: 4 }}>Household Cabinet</h1>
+          <p className="muted" style={{ margin: '0.25rem 0 0' }}>
+            See what you have on hand, track low stock &amp; wishlists, and import from Protocol OS.
           </p>
         </div>
+
         <div className="row-wrap">
           <button
             type="button"
@@ -140,7 +149,7 @@ export function CabinetView({
             disabled={busy}
             onClick={handleLoadStarter}
           >
-            <Sparkles size={14} /> Load Starter Reference Catalog
+            <Sparkles size={14} /> Load Starter Library
           </button>
           <button
             type="button"
@@ -150,14 +159,6 @@ export function CabinetView({
             onClick={() => fileInputRef.current?.click()}
           >
             <Upload size={14} /> Import Protocol OS
-          </button>
-          <button
-            type="button"
-            className="btn btn-sm"
-            disabled={busy}
-            onClick={() => setShowPasteModal(true)}
-          >
-            Paste Protocol OS JSON
           </button>
           <input
             ref={fileInputRef}
@@ -184,14 +185,40 @@ export function CabinetView({
         </div>
       ) : null}
 
-      {/* Summary & Ownership Filter Chips */}
-      <div className="row-wrap">
+      {/* Interactive Glass Stat Strip */}
+      <div className="grid-4">
+        {STATUS_META.map(({ key, label, tone }) => {
+          const active = statusFilter === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              className="card"
+              onClick={() => setStatusFilter(active ? 'all' : key)}
+              style={{
+                textAlign: 'left',
+                cursor: 'pointer',
+                borderColor: active ? 'var(--accent-border)' : undefined,
+              }}
+            >
+              <div className="metric-label">{label}</div>
+              <div className="display-sm num" style={{ color: tone, marginTop: 4 }}>
+                {counts[key] || 0}
+              </div>
+              <div className="dim">{active ? 'Filtering · tap to clear' : 'Tap to filter'}</div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Filter Pills */}
+      <div className="section-tabs">
         <button
           type="button"
           className={`tab-btn${statusFilter === 'all' ? ' active' : ''}`}
           onClick={() => setStatusFilter('all')}
         >
-          All ({counts.total})
+          All <span className="tab-count">{counts.total}</span>
         </button>
         {OWNERSHIP_STATUSES.map((st) => (
           <button
@@ -200,23 +227,23 @@ export function CabinetView({
             className={`tab-btn${statusFilter === st ? ' active' : ''}`}
             onClick={() => setStatusFilter(st)}
           >
-            {st.replace(/_/g, ' ')} ({counts[st] || 0})
+            {st.replace(/_/g, ' ')} <span className="tab-count">{counts[st] || 0}</span>
           </button>
         ))}
       </div>
 
-      {/* Cabinet List */}
+      {/* Cabinet Inventory List */}
       <div className="stack-v" data-testid="cabinet-list">
         {items.length === 0 ? (
-          <div className="card stack-v" style={{ textAlign: 'center', padding: '2rem 1rem' }}>
-            <Package size={28} color="var(--gold)" style={{ margin: '0 auto' }} />
-            <h2 style={{ margin: 0, fontSize: '1.1rem' }}>
-              {(compounds || []).length === 0 ? 'Your Cabinet is Empty' : 'No Matching Compounds'}
+          <div className="glass stack-sm" style={{ textAlign: 'center', padding: '2.2rem 1.2rem', alignItems: 'center' }}>
+            <Package size={28} color="var(--accent)" />
+            <h2 className="display-sm">
+              {(compounds || []).length === 0 ? 'Your Cabinet Is Empty' : 'No Items in This View'}
             </h2>
-            <p className="muted" style={{ margin: 0 }}>
+            <p className="muted" style={{ margin: 0, maxWidth: 440 }}>
               {(compounds || []).length === 0
-                ? 'Start clean by adding compounds in Sections, import a Protocol OS export, or load the generic non-personal Starter Reference Catalog.'
-                : 'Adjust your ownership filter or clear global search to see all cabinet items.'}
+                ? 'Load the 26-compound Starter Library, import your Protocol OS export, or add compounds in Library.'
+                : 'Tap All above to view your full household catalog.'}
             </p>
           </div>
         ) : (
@@ -226,8 +253,8 @@ export function CabinetView({
               const lowRunOut =
                 typeof own.remainingDoses === 'number' && Number.isFinite(own.remainingDoses) && own.remainingDoses <= 3;
               return (
-                <article key={compound.id} className="card stack-v">
-                  <div className="space-between">
+                <article key={compound.id} className="card stack-sm">
+                  <div className="space-between" style={{ alignItems: 'flex-start' }}>
                     <div>
                       <button
                         type="button"
@@ -238,38 +265,43 @@ export function CabinetView({
                           padding: 0,
                           color: 'var(--text)',
                           fontWeight: 700,
-                          fontSize: '1.02rem',
+                          fontSize: '1rem',
                           cursor: 'pointer',
                           textAlign: 'left',
                         }}
                       >
                         {compound.name}
                       </button>
-                      <div className="muted" style={{ fontSize: '0.8rem' }}>
+                      <div className="dim" style={{ marginTop: 2 }}>
                         {sec?.name || compound.sectionId}
-                        {compound.dosages?.route ? ` • ${compound.dosages.route}` : ''}
-                        {own.scope === 'household' ? ' • Shared Household' : ` • Personal (${own.scope})`}
+                        {compound.dosages?.route ? ` · ${compound.dosages.route}` : ''}
+                        {own.scope === 'household' ? ' · Shared' : ' · Personal'}
                       </div>
                     </div>
                     <span className={`pill pill-${own.status}`}>{own.status.replace(/_/g, ' ')}</span>
                   </div>
 
                   {lowRunOut ? (
-                    <div className="banner-warn" style={{ padding: '0.45rem 0.65rem', fontSize: '0.82rem' }}>
+                    <div className="banner-warn" style={{ padding: '0.45rem 0.65rem', fontSize: '0.8rem' }}>
                       <AlertTriangle size={13} style={{ verticalAlign: 'middle', marginRight: 5 }} />
-                      Run-out warning: {own.remainingDoses} doses remaining.
+                      Low stock: {own.remainingDoses} dose(s) remaining.
                     </div>
                   ) : null}
 
-                  <div className="space-between">
-                    <div className="muted" style={{ fontSize: '0.8rem' }}>
-                      {own.quantity != null ? `Qty: ${own.quantity} ${own.unit || ''}` : 'No quantity logged'}
-                      {own.expiryDate ? ` • Exp: ${own.expiryDate}` : ''}
+                  <div className="space-between" style={{ paddingTop: '0.35rem', borderTop: '1px solid var(--border-subtle)' }}>
+                    <div className="dim num">
+                      {own.remainingDoses != null
+                        ? `${own.remainingDoses} doses left`
+                        : own.quantity != null
+                          ? `Qty: ${own.quantity} ${own.unit || ''}`
+                          : 'No stock count logged'}
+                      {own.expiryDate ? ` · Exp ${own.expiryDate}` : ''}
                     </div>
                     <select
                       aria-label={`Ownership status for ${compound.name}`}
                       value={own.status}
                       onChange={(e) => handleQuickOwnership(compound.id, e.target.value, own.scope)}
+                      style={{ padding: '0.32rem 0.6rem', fontSize: '0.8rem' }}
                     >
                       {OWNERSHIP_STATUSES.map((st) => (
                         <option key={st} value={st}>
@@ -289,10 +321,8 @@ export function CabinetView({
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Import Protocol OS JSON">
           <div className="modal-card stack-v">
             <div className="space-between">
-              <h2 style={{ margin: 0, color: 'var(--gold)' }}>Import Protocol OS JSON</h2>
-              <button type="button" className="btn btn-sm" onClick={() => setShowPasteModal(false)}>
-                Close
-              </button>
+              <h2 className="display-sm">Paste Protocol OS Export</h2>
+              <button type="button" className="btn btn-sm" onClick={() => setShowPasteModal(false)}>Close</button>
             </div>
             <form
               className="stack-v"
@@ -302,21 +332,19 @@ export function CabinetView({
               }}
             >
               <label className="field-label">
-                Protocol OS Export JSON
+                Export JSON
                 <textarea
                   rows={8}
                   value={pasteText}
                   onChange={(e) => setPasteText(e.target.value)}
-                  placeholder='Paste protocol-os-export/v1 JSON here...'
+                  placeholder="Paste protocol-os-export/v1 JSON…"
                   required
                 />
               </label>
-              <div className="row-wrap">
+              <div className="row-wrap" style={{ justifyContent: 'flex-end' }}>
+                <button type="button" className="btn" onClick={() => setShowPasteModal(false)}>Cancel</button>
                 <button type="submit" className="btn btn-primary" disabled={busy}>
-                  {busy ? 'Importing…' : 'Import Protocol OS'}
-                </button>
-                <button type="button" className="btn" onClick={() => setShowPasteModal(false)}>
-                  Cancel
+                  {busy ? 'Importing…' : 'Import'}
                 </button>
               </div>
             </form>

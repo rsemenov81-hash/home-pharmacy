@@ -7,9 +7,10 @@ import {
   Settings,
   Sun,
   Moon,
-  ShieldAlert,
   Lock,
   WifiOff,
+  Search,
+  ChevronDown,
 } from 'lucide-react';
 import { verifyDevicePin } from '../lib/state.js';
 
@@ -29,14 +30,17 @@ export function AuthGate({ onConnect, authError }) {
   };
 
   return (
-    <div className="app-shell" style={{ justifyContent: 'center', alignItems: 'center', padding: '1.5rem' }}>
-      <main className="card stack-v" style={{ maxWidth: 440, width: '100%' }}>
+    <div className="auth-screen">
+      <main className="glass auth-card stack-v">
         <div className="row-wrap">
-          <Lock size={20} color="var(--gold)" />
-          <h1 style={{ margin: 0, fontSize: '1.35rem', color: 'var(--gold)' }}>Home Pharmacy</h1>
+          <span className="brand-mark">❖</span>
+          <div>
+            <div className="eyebrow">HOME PHARMACY</div>
+            <h1 className="display-sm" style={{ marginTop: 2 }}>Unlock Your Hub</h1>
+          </div>
         </div>
         <p className="muted" style={{ margin: 0 }}>
-          Sign in with your Household Admin Token or scoped API key to access your private household health hub.
+          Enter your Household Access Token or scoped API key to open your private protocol hub.
         </p>
         {authError ? (
           <div className="banner-danger" role="alert">
@@ -45,12 +49,12 @@ export function AuthGate({ onConnect, authError }) {
         ) : null}
         <form onSubmit={handleSubmit} className="stack-v">
           <label className="field-label" htmlFor="auth-token-input">
-            Access Token / Passcode
+            Access Token
             <input
               id="auth-token-input"
               type="password"
               name="token"
-              placeholder="Enter household access token"
+              placeholder="Paste access token…"
               value={tokenInput}
               onChange={(e) => setTokenInput(e.target.value)}
               autoComplete="current-password"
@@ -58,11 +62,11 @@ export function AuthGate({ onConnect, authError }) {
             />
           </label>
           <button type="submit" className="btn btn-primary" disabled={busy}>
-            {busy ? 'Connecting…' : 'Sign In & Unlock Hub'}
+            <Lock size={15} /> {busy ? 'Unlocking…' : 'Sign In & Unlock'}
           </button>
         </form>
-        <p className="muted" style={{ fontSize: '0.78rem', margin: 0 }}>
-          Personal reference tool only — not medical advice. Private household records are never exposed publicly.
+        <p className="dim" style={{ margin: 0, textAlign: 'center' }}>
+          Personal reference tool only — not medical advice.
         </p>
       </main>
     </div>
@@ -72,7 +76,6 @@ export function AuthGate({ onConnect, authError }) {
 export function PinLockOverlay({ onUnlocked }) {
   const [pin, setPin] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
-  const [lockedOut, setLockedOut] = useState(false);
 
   const handleUnlock = async (e) => {
     e.preventDefault();
@@ -80,21 +83,22 @@ export function PinLockOverlay({ onUnlocked }) {
     if (res.ok) {
       setPin('');
       setErrorMsg('');
-      setLockedOut(false);
       onUnlocked();
     } else {
       setPin('');
-      setLockedOut(Boolean(res.lockedOut));
       setErrorMsg(res.message || 'Incorrect PIN.');
     }
   };
 
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Device PIN Lock">
-      <div className="modal-card stack-v" style={{ maxWidth: 400 }}>
+      <div className="modal-card stack-v" style={{ maxWidth: 380 }}>
         <div className="row-wrap">
-          <Lock size={20} color="var(--gold)" />
-          <h2 style={{ margin: 0, color: 'var(--gold)' }}>Device Locked</h2>
+          <span className="brand-mark"><Lock size={15} /></span>
+          <div>
+            <div className="eyebrow">PRIVACY SHIELD</div>
+            <h2 className="display-sm">Device Locked</h2>
+          </div>
         </div>
         <p className="muted" style={{ margin: 0 }}>
           Enter your device PIN to unlock Home Pharmacy.
@@ -113,13 +117,13 @@ export function PinLockOverlay({ onUnlocked }) {
               inputMode="numeric"
               name="pin"
               aria-label="Enter PIN"
-              placeholder="Enter device PIN"
+              placeholder="••••"
               value={pin}
               onChange={(e) => setPin(e.target.value)}
               autoFocus
             />
           </label>
-          <button type="submit" className="btn btn-primary" disabled={lockedOut && false}>
+          <button type="submit" className="btn btn-primary">
             Unlock
           </button>
         </form>
@@ -143,8 +147,8 @@ export function AppShell({
   children,
 }) {
   const navItems = [
-    { id: 'sections', testId: 'nav-sections', label: 'Sections', Icon: Layers },
-    { id: 'stack', testId: 'nav-stack', label: 'Stack & Spread', Icon: CalendarClock },
+    { id: 'sections', testId: 'nav-sections', label: 'Library', Icon: Layers },
+    { id: 'stack', testId: 'nav-stack', label: 'Stack', Icon: CalendarClock },
     { id: 'cabinet', testId: 'nav-cabinet', label: 'Cabinet', Icon: Package },
     { id: 'ai-hub', testId: 'nav-ai-hub', label: 'AI Hub', Icon: Sparkles, badge: pendingProposalCount },
     { id: 'settings', testId: 'nav-settings', label: 'Settings', Icon: Settings },
@@ -153,80 +157,91 @@ export function AppShell({
   return (
     <div className="app-shell">
       <header className="topbar">
-        <div className="brand">
-          <span aria-hidden="true">❖</span>
-          <span>Home Pharmacy</span>
-          <span className="brand-sub">Household Hub</span>
-        </div>
-
-        <div className="topbar-controls">
-          <div className="search-wrap">
-            <input
-              type="text"
-              data-testid="global-search-input"
-              aria-label="Search compounds across all sections"
-              placeholder="Search compounds, aliases, mechanisms…"
-              value={searchQuery}
-              onChange={(e) => onSearchChange(e.target.value)}
-            />
+        <div className="topbar-inner">
+          <div className="brand">
+            <span className="brand-mark" aria-hidden="true">❖</span>
+            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
+              <span>Home Pharmacy</span>
+              <span className="brand-sub">Household OS</span>
+            </div>
           </div>
 
-          <select
-            data-testid="member-switcher"
-            aria-label="Active household member"
-            value={activeMemberId}
-            onChange={(e) => onMemberChange(e.target.value)}
-          >
-            {(members || []).map((m) => (
-              <option key={m.id} value={m.id} data-testid={`member-option-${m.id}`}>
-                {m.name}
-              </option>
-            ))}
-          </select>
+          <div className="topbar-controls">
+            <div className="search-wrap">
+              <Search size={14} className="search-icon" aria-hidden="true" />
+              <input
+                type="text"
+                data-testid="global-search-input"
+                aria-label="Search compounds across all sections"
+                placeholder="Search compounds, aliases…"
+                value={searchQuery}
+                onChange={(e) => onSearchChange(e.target.value)}
+              />
+            </div>
 
-          <button
-            type="button"
-            className="btn btn-sm"
-            data-testid="theme-toggle"
-            aria-label="Toggle dark and light theme"
-            onClick={onToggleTheme}
-            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
-          >
-            {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
-            <span>{theme === 'dark' ? 'Light' : 'Dark'}</span>
-          </button>
+            <div className="member-pill">
+              <select
+                className="member-select"
+                data-testid="member-switcher"
+                aria-label="Active household member"
+                value={activeMemberId}
+                onChange={(e) => onMemberChange(e.target.value)}
+              >
+                {(members || []).map((m) => (
+                  <option key={m.id} value={m.id} data-testid={`member-option-${m.id}`}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={13} className="member-chevron" aria-hidden="true" />
+            </div>
+
+            <button
+              type="button"
+              className="btn btn-icon"
+              data-testid="theme-toggle"
+              aria-label="Toggle dark and light theme"
+              onClick={onToggleTheme}
+              title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} appearance`}
+            >
+              {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+            </button>
+          </div>
         </div>
       </header>
 
-      <nav className="primary-nav" aria-label="Primary sections">
-        {navItems.map(({ id, testId, label, Icon, badge }) => (
-          <button
-            key={id}
-            type="button"
-            data-testid={testId}
-            className={`nav-btn${activeTab === id ? ' active' : ''}`}
-            onClick={() => onTabChange(id)}
-          >
-            <Icon size={15} />
-            <span>{label}</span>
-            {badge > 0 ? <span className="badge-count">{badge}</span> : null}
-          </button>
-        ))}
-      </nav>
-
       {offline ? (
-        <div className="banner-warn" role="status" style={{ margin: '0.75rem 1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <WifiOff size={16} />
-          <span>Offline mode — showing cached household catalog. Changes will sync when reconnected.</span>
+        <div style={{ maxWidth: 1120, width: '100%', margin: '0.75rem auto 0', padding: '0 1rem' }}>
+          <div className="banner-warn row-wrap" role="status">
+            <WifiOff size={15} />
+            <span>Offline — viewing cached household data.</span>
+          </div>
         </div>
       ) : null}
 
       <main className="main-content">{children}</main>
 
       <footer className="disclaimer-footer" role="contentinfo">
-        <ShieldAlert size={13} style={{ verticalAlign: 'middle', marginRight: 6 }} />
-        <strong>Medical & Harm-Reduction Notice:</strong> Home Pharmacy is a personal reference & scheduling tool only — not medical advice, diagnosis, or prescribing guidance. Consult a licensed healthcare professional for clinical decisions and lab monitoring.
+        Personal reference &amp; scheduling tool only — not medical advice. Consult a licensed healthcare professional for clinical decisions and lab monitoring.
       </footer>
+
+      <div className="pill-nav-wrap">
+        <nav className="primary-nav" aria-label="Primary navigation">
+          {navItems.map(({ id, testId, label, Icon, badge }) => (
+            <button
+              key={id}
+              type="button"
+              data-testid={testId}
+              className={`nav-btn${activeTab === id ? ' active' : ''}`}
+              onClick={() => onTabChange(id)}
+            >
+              <Icon size={18} strokeWidth={activeTab === id ? 2.2 : 1.8} />
+              <span>{label}</span>
+              {badge > 0 ? <span className="badge-count">{badge}</span> : null}
+            </button>
+          ))}
+        </nav>
+      </div>
     </div>
   );
 }

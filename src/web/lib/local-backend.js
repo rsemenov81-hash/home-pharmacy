@@ -10,6 +10,7 @@
 
 import { createApp } from '../../backend/app.js';
 import { createMemoryStorage } from '../../backend/storage/memory.js';
+import { createEmptyHubState, seedStarterCatalog } from '../../core/index.js';
 
 const LOCAL_MODE_KEY = 'hp_local_browser_mode_v1';
 const LOCAL_HUB_KEY = 'hp_local_browser_hub_v1';
@@ -67,6 +68,20 @@ function createLocalStorageAdapter() {
     if (rawAuth) initialAuth = JSON.parse(rawAuth);
   } catch {
     // start fresh on corrupt/unavailable storage
+  }
+
+  // On static hosted first launch (or untouched empty rev 0), pre-load the generic,
+  // non-personal 26-compound Starter Reference Library so users immediately explore a rich hub.
+  if (!initialHub || ((initialHub.compounds || []).length === 0 && (initialHub._rev || 0) === 0)) {
+    const seeded = seedStarterCatalog(initialHub || createEmptyHubState(), {
+      createOwnershipRecords: false,
+    });
+    initialHub = seeded.state;
+    try {
+      window.localStorage.setItem(LOCAL_HUB_KEY, JSON.stringify(initialHub));
+    } catch {
+      // ignore quota errors
+    }
   }
 
   const mem = createMemoryStorage(initialHub);

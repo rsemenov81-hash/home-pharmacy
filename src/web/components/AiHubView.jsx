@@ -47,31 +47,26 @@ export function AiHubView({
   const [oauthClients, setOauthClients] = useState([]);
   const [auditLog, setAuditLog] = useState([]);
 
-  // Proposals state
   const [proposalMsg, setProposalMsg] = useState('');
   const [proposalErr, setProposalErr] = useState('');
 
-  // Prompt builder modal
   const [showPromptModal, setShowPromptModal] = useState(false);
   const [promptCompoundName, setPromptCompoundName] = useState('');
   const [promptSectionId, setPromptSectionId] = useState('peptides');
   const [generatedPrompt, setGeneratedPrompt] = useState('');
   const [promptLoading, setPromptLoading] = useState(false);
 
-  // JSON paste importer
   const [jsonInput, setJsonInput] = useState('');
   const [importStatus, setImportStatus] = useState('');
   const [importError, setImportError] = useState('');
   const [importing, setImporting] = useState(false);
 
-  // API key minting
   const [keyName, setKeyName] = useState('');
   const [keyScope, setKeyScope] = useState('propose');
   const [mintedSecret, setMintedSecret] = useState(null);
   const [keyError, setKeyError] = useState('');
   const [minting, setMinting] = useState(false);
 
-  // Context MD copy
   const [contextMsg, setContextMsg] = useState('');
   const [contextPreview, setContextPreview] = useState('');
 
@@ -89,7 +84,7 @@ export function AiHubView({
       setOauthClients(cRes.json?.clients || []);
       setAuditLog((aRes.json?.auditLog || aRes.json?.entries || []).slice(0, 20));
     } catch {
-      // Ignore secondary metadata fetch failure (e.g., read-only or offline)
+      // ignore if read-only or offline
     }
   };
 
@@ -102,7 +97,7 @@ export function AiHubView({
     setProposalMsg('');
     try {
       await api.post(`/api/v1/proposals/${encodeURIComponent(proposalId)}/resolve`, { action });
-      setProposalMsg(`Proposal ${action === 'approve' ? 'approved and applied' : 'dismissed'}.`);
+      setProposalMsg(`Proposal ${action === 'approve' ? 'approved and saved' : 'dismissed'}.`);
       await onRefresh();
       await loadAiMeta();
     } catch (err) {
@@ -138,7 +133,7 @@ export function AiHubView({
     setImportStatus('');
     const raw = jsonInput.trim();
     if (!raw) {
-      setImportError('Please paste a valid JSON compound profile before importing.');
+      setImportError('Paste a compound JSON profile before importing.');
       return;
     }
 
@@ -151,7 +146,7 @@ export function AiHubView({
     }
 
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      setImportError('Invalid JSON payload: expected a compound profile JSON object.');
+      setImportError('Invalid JSON payload: expected a compound profile object.');
       return;
     }
 
@@ -167,13 +162,13 @@ export function AiHubView({
       const createdName = res.json?.compound?.name || parsed.name;
       setImportStatus(
         res.status === 202
-          ? `Held "${createdName}" in Proposals Inbox for review.`
-          : `Imported "${createdName}" into catalog successfully.`,
+          ? `Added “${createdName}” to your review inbox.`
+          : `Added “${createdName}” to your library.`,
       );
       await onRefresh();
       await loadAiMeta();
     } catch (err) {
-      setImportError(err.message || 'Validation failed while importing AI JSON compound.');
+      setImportError(err.message || 'Validation failed while importing JSON.');
     } finally {
       setImporting(false);
     }
@@ -199,7 +194,7 @@ export function AiHubView({
       setKeyName('');
       await loadAiMeta();
     } catch (err) {
-      setKeyError(err.message || 'Failed to mint scoped API key.');
+      setKeyError(err.message || 'Could not create API key.');
     } finally {
       setMinting(false);
     }
@@ -211,7 +206,7 @@ export function AiHubView({
       await api.del(`/api/v1/keys/${encodeURIComponent(keyId)}`);
       await loadAiMeta();
     } catch (err) {
-      setKeyError(err.message || 'Failed to revoke API key.');
+      setKeyError(err.message || 'Could not revoke key.');
     }
   };
 
@@ -237,23 +232,25 @@ export function AiHubView({
           await navigator.clipboard.writeText(md);
         }
       } catch {
-        // Clipboard permission unavailable in headless context; preview is shown below
+        // clipboard unavailable in headless contexts
       }
-      setContextMsg('Copied portable Markdown AI context bundle (zero secrets included).');
+      setContextMsg('Copied your clean Markdown health context — paste into Gemini, Claude, Grok, ChatGPT, or Muse.');
     } catch (err) {
-      setContextMsg(err.message || 'Failed to export Markdown context bundle.');
+      setContextMsg(err.message || 'Could not export context.');
     }
   };
 
   return (
     <div className="stack-v">
-      <div className="space-between">
+      <div className="space-between" style={{ alignItems: 'flex-end' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: '1.45rem' }}>Universal Multi-AI Hub</h1>
-          <p className="muted" style={{ margin: '0.2rem 0 0' }}>
-            Review AI-proposed compounds, build schema-strict research prompts, import AI JSON, mint scoped API keys, and connect Gemini, Claude, Grok Bot, ChatGPT/GPT, and Meta Muse.
+          <div className="eyebrow">MULTI-AI ASSISTANT HUB</div>
+          <h1 className="display-title" style={{ marginTop: 4 }}>Connect Your AIs</h1>
+          <p className="muted" style={{ margin: '0.25rem 0 0' }}>
+            Research new compounds with Gemini, Claude, Grok, ChatGPT, or Muse — and review AI updates in one place.
           </p>
         </div>
+
         <div className="row-wrap">
           <button
             type="button"
@@ -261,7 +258,7 @@ export function AiHubView({
             data-testid="btn-open-ai-prompt-builder"
             onClick={openPromptBuilder}
           >
-            <Sparkles size={14} /> AI Research Prompt Builder
+            <Sparkles size={14} /> Research with AI
           </button>
           <button
             type="button"
@@ -269,7 +266,7 @@ export function AiHubView({
             data-testid="btn-copy-context-md"
             onClick={handleCopyContextMd}
           >
-            <Copy size={14} /> Copy Context MD
+            <Copy size={14} /> Copy Context
           </button>
         </div>
       </div>
@@ -282,51 +279,40 @@ export function AiHubView({
 
       {contextPreview ? (
         <details className="card">
-          <summary style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--gold)' }}>
-            Preview Portable Context Bundle ({contextPreview.length} chars)
+          <summary style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--accent)' }}>
+            View Copied Context ({contextPreview.length} chars)
           </summary>
-          <pre className="code-block" style={{ marginTop: '0.6rem', maxHeight: 240 }}>
+          <pre className="code-block" style={{ marginTop: '0.6rem', maxHeight: 220 }}>
             {contextPreview}
           </pre>
         </details>
       ) : null}
 
       {/* 1. AI Proposals Inbox */}
-      <section className="card stack-v" data-testid="ai-proposals-list">
+      <section className="card stack-sm" data-testid="ai-proposals-list">
         <div className="space-between">
-          <h2 style={{ margin: 0, fontSize: '1.12rem', color: 'var(--gold)' }}>
-            AI Proposals Inbox ({pendingProposals.length} pending)
-          </h2>
+          <div>
+            <div className="eyebrow">REVIEW QUEUE</div>
+            <h2 className="section-heading">AI Proposals ({pendingProposals.length} pending)</h2>
+          </div>
         </div>
 
-        {proposalMsg ? (
-          <div className="banner-ok" role="status">
-            {proposalMsg}
-          </div>
-        ) : null}
-        {proposalErr ? (
-          <div className="banner-danger" role="alert">
-            {proposalErr}
-          </div>
-        ) : null}
+        {proposalMsg ? <div className="banner-ok" role="status">{proposalMsg}</div> : null}
+        {proposalErr ? <div className="banner-danger" role="alert">{proposalErr}</div> : null}
 
         {pendingProposals.length === 0 ? (
           <p className="muted" style={{ margin: 0 }}>
-            No pending AI proposals. Edits to human-verified profiles and held AI drafts will appear here for 1-click approval.
+            All caught up — when an AI proposes a new compound or suggests edits to a verified profile, it appears here for 1-tap approval.
           </p>
         ) : (
-          <div className="stack-v">
+          <div className="stack-sm">
             {pendingProposals.map((p) => (
-              <div
-                key={p.id}
-                className="slot-card stack-v"
-                style={{ gap: '0.5rem' }}
-              >
+              <div key={p.id} className="slot-card slot-populated stack-sm">
                 <div className="space-between">
                   <div>
                     <strong>{p.summary || p.proposedPayload?.name || p.type}</strong>
-                    <div className="muted" style={{ fontSize: '0.8rem' }}>
-                      Type: {p.type} • Source: {p.sourceModel || p.actor || 'ai'} • Status: {p.status}
+                    <div className="dim">
+                      {p.sourceModel || p.actor || 'AI'} · {p.type.replace(/_/g, ' ')}
                     </div>
                   </div>
                   <div className="row-wrap">
@@ -349,9 +335,12 @@ export function AiHubView({
                   </div>
                 </div>
                 {p.proposedPayload?.name || p.proposedPatch ? (
-                  <pre className="code-block" style={{ margin: 0, maxHeight: 140 }}>
-                    {JSON.stringify(p.proposedPayload || p.proposedPatch, null, 2)}
-                  </pre>
+                  <details>
+                    <summary className="dim" style={{ cursor: 'pointer' }}>Inspect proposed fields</summary>
+                    <pre className="code-block" style={{ marginTop: 6, maxHeight: 140 }}>
+                      {JSON.stringify(p.proposedPayload || p.proposedPatch, null, 2)}
+                    </pre>
+                  </details>
                 ) : null}
               </div>
             ))}
@@ -359,16 +348,17 @@ export function AiHubView({
         )}
       </section>
 
-      {/* 2. AI JSON Paste Importer */}
-      <section className="card stack-v">
+      {/* 2. Paste AI JSON */}
+      <section className="card stack-sm">
         <div className="row-wrap">
-          <FileJson size={17} color="var(--gold)" />
-          <h2 style={{ margin: 0, fontSize: '1.12rem', color: 'var(--gold)' }}>
-            Import AI-Researched Compound JSON
-          </h2>
+          <FileJson size={16} color="var(--accent)" />
+          <div>
+            <div className="eyebrow">QUICK IMPORT</div>
+            <h2 className="section-heading">Add Compound from AI Reply</h2>
+          </div>
         </div>
         <p className="muted" style={{ margin: 0 }}>
-          Paste JSON generated by Gemini, Claude, Grok, ChatGPT, or Muse using the Research Prompt Builder to validate and save into your catalog.
+          Tap <strong>Research with AI</strong> above, ask your favorite AI to fill out a compound, then paste the JSON reply here.
         </p>
         {importError ? (
           <div className="banner-danger" role="alert">
@@ -383,51 +373,111 @@ export function AiHubView({
           </div>
         ) : null}
         <label className="field-label">
-          Compound Profile JSON
+          AI Compound JSON
           <textarea
             data-testid="ai-json-import-textarea"
-            rows={6}
+            rows={4}
             placeholder='{"name": "Semax", "sectionId": "peptides", "summary": "...", ...}'
             value={jsonInput}
             onChange={(e) => setJsonInput(e.target.value)}
           />
         </label>
-        <div className="row-wrap">
+        <div>
           <button
             type="button"
-            className="btn btn-primary"
+            className="btn btn-primary btn-sm"
             data-testid="btn-import-ai-json"
             disabled={importing}
             onClick={handleImportAiJson}
           >
-            {importing ? 'Validating & Importing…' : 'Validate & Import JSON'}
+            {importing ? 'Importing…' : 'Import to Library'}
           </button>
         </div>
       </section>
 
-      {/* 3. Scoped API Keys & OAuth Clients */}
-      <section className="card stack-v">
+      {/* 3. Five AI Assistants */}
+      <section className="stack-sm">
         <div className="row-wrap">
-          <KeyRound size={17} color="var(--gold)" />
-          <h2 style={{ margin: 0, fontSize: '1.12rem', color: 'var(--gold)' }}>
-            Scoped API Keys & Connected OAuth 2.1 Clients
-          </h2>
-        </div>
-        <p className="muted" style={{ margin: 0 }}>
-          Keys are hashed at rest (SHA-256) and raw secrets are displayed only once upon creation.
-        </p>
-
-        {keyError ? (
-          <div className="banner-danger" role="alert">
-            {keyError}
+          <Bot size={16} color="var(--accent)" />
+          <div>
+            <div className="eyebrow">5-AI ECOSYSTEM</div>
+            <h2 className="section-heading">Works With Every AI You Use</h2>
           </div>
-        ) : null}
+        </div>
+
+        <div className="grid-3">
+          <article className="card stack-sm" data-testid="ai-guide-gemini">
+            <div className="space-between">
+              <strong style={{ color: 'var(--accent)' }}>Google Gemini</strong>
+              <span className="pill">MCP · Gems</span>
+            </div>
+            <p className="muted" style={{ margin: 0 }}>
+              Connect via Remote MCP or paste your Context bundle into a Gemini Gem.
+            </p>
+            <div className="code-block">{origin}/mcp</div>
+          </article>
+
+          <article className="card stack-sm" data-testid="ai-guide-claude">
+            <div className="space-between">
+              <strong style={{ color: 'var(--accent)' }}>Anthropic Claude</strong>
+              <span className="pill">OAuth 2.1 · MCP</span>
+            </div>
+            <p className="muted" style={{ margin: 0 }}>
+              Add as a Custom Connector in Claude.ai or Claude Code with automatic OAuth sign-in.
+            </p>
+            <div className="code-block">{origin}/mcp</div>
+          </article>
+
+          <article className="card stack-sm" data-testid="ai-guide-grok">
+            <div className="space-between">
+              <strong style={{ color: 'var(--accent)' }}>xAI Grok Bot</strong>
+              <span className="pill">MCP · REST</span>
+            </div>
+            <p className="muted" style={{ margin: 0 }}>
+              Connect Grok Bot using a scoped Bearer API key minted below.
+            </p>
+            <div className="code-block">{origin}/api/v1/compounds</div>
+          </article>
+
+          <article className="card stack-sm" data-testid="ai-guide-gpt">
+            <div className="space-between">
+              <strong style={{ color: 'var(--accent)' }}>ChatGPT / GPT</strong>
+              <span className="pill">OpenAPI 3.1 · MCP</span>
+            </div>
+            <p className="muted" style={{ margin: 0 }}>
+              Import the OpenAPI schema into Custom GPT Actions or connect via Remote MCP.
+            </p>
+            <div className="code-block">{origin}/openapi.json</div>
+          </article>
+
+          <article className="card stack-sm" data-testid="ai-guide-muse">
+            <div className="space-between">
+              <strong style={{ color: 'var(--accent)' }}>Meta Muse</strong>
+              <span className="pill">OpenAPI · Context</span>
+            </div>
+            <p className="muted" style={{ margin: 0 }}>
+              Use OpenAPI / llms.txt discovery or paste your Context MD directly in chat.
+            </p>
+            <div className="code-block">{origin}/llms.txt</div>
+          </article>
+        </div>
+      </section>
+
+      {/* 4. Scoped API Keys & OAuth Clients */}
+      <section className="card stack-sm">
+        <div className="row-wrap">
+          <KeyRound size={16} color="var(--accent)" />
+          <div>
+            <div className="eyebrow">ACCESS KEYS</div>
+            <h2 className="section-heading">Scoped AI Keys &amp; Connections</h2>
+          </div>
+        </div>
+
+        {keyError ? <div className="banner-danger" role="alert">{keyError}</div> : null}
 
         {mintedSecret ? (
-          <div className="banner-ok stack-v" role="status">
-            <strong>
-              New API Key Minted ({mintedSecret.name} — scope: {mintedSecret.scope}) — Copy now, shown ONCE:
-            </strong>
+          <div className="banner-ok stack-sm" role="status">
+            <strong>Copy your new key now ({mintedSecret.name} · {mintedSecret.scope}) — shown only once:</strong>
             <input
               type="text"
               readOnly
@@ -445,74 +495,50 @@ export function AiHubView({
             <input
               type="text"
               name="keyName"
-              placeholder="e.g., Claude Pro Key, Grok Bot"
+              placeholder="e.g., Claude, Grok Bot"
               value={keyName}
               onChange={(e) => setKeyName(e.target.value)}
             />
           </label>
-          <label className="field-label" style={{ minWidth: 150 }}>
-            Scope
+          <label className="field-label" style={{ minWidth: 140 }}>
+            Permission Scope
             <select name="scope" aria-label="API Key Scope" value={keyScope} onChange={(e) => setKeyScope(e.target.value)}>
               {API_TOKEN_SCOPES.map((sc) => (
-                <option key={sc} value={sc}>
-                  {sc}
-                </option>
+                <option key={sc} value={sc}>{sc}</option>
               ))}
             </select>
           </label>
-          <button
-            type="submit"
-            className="btn btn-primary"
-            data-testid="btn-mint-api-key"
-            disabled={minting}
-          >
-            <KeyRound size={14} /> {minting ? 'Minting…' : 'Mint API Key'}
+          <button type="submit" className="btn btn-primary" data-testid="btn-mint-api-key" disabled={minting}>
+            <KeyRound size={14} /> {minting ? 'Creating…' : 'Create Key'}
           </button>
         </form>
 
         {keys.length > 0 ? (
-          <div className="stack-v">
+          <div className="stack-sm">
             {keys.map((k) => (
-              <div key={k.id} className="slot-card space-between">
+              <div key={k.id} className="card-subtle space-between">
                 <div>
-                  <strong>{k.name}</strong>{' '}
-                  <span className="pill">{k.scope}</span>
-                  <div className="muted" style={{ fontSize: '0.78rem' }}>
-                    Prefix: <code>{k.prefix || 'hp_key_...'}</code> • Created: {k.createdAt ? k.createdAt.slice(0, 10) : '—'}
-                  </div>
+                  <strong>{k.name}</strong> <span className="pill pill-accent">{k.scope}</span>
+                  <div className="dim num">{k.prefix || 'hp_key_...'} · {k.createdAt ? k.createdAt.slice(0, 10) : '—'}</div>
                 </div>
-                <button
-                  type="button"
-                  className="btn btn-danger btn-sm"
-                  onClick={() => handleRevokeKey(k.id)}
-                >
+                <button type="button" className="btn btn-danger btn-sm" onClick={() => handleRevokeKey(k.id)}>
                   <Trash2 size={13} /> Revoke
                 </button>
               </div>
             ))}
           </div>
-        ) : (
-          <p className="muted" style={{ margin: 0, fontSize: '0.84rem' }}>
-            No named API keys minted yet.
-          </p>
-        )}
+        ) : null}
 
         {oauthClients.length > 0 ? (
-          <div className="stack-v" style={{ marginTop: '0.5rem' }}>
-            <h3 style={{ margin: 0, fontSize: '0.96rem' }}>Connected OAuth 2.1 Clients</h3>
+          <div className="stack-sm">
+            <div className="eyebrow">CONNECTED OAUTH APPS</div>
             {oauthClients.map((c) => (
-              <div key={c.client_id || c.id} className="slot-card space-between">
+              <div key={c.client_id || c.id} className="card-subtle space-between">
                 <div>
                   <strong>{c.client_name || c.client_id}</strong>
-                  <div className="muted" style={{ fontSize: '0.78rem' }}>
-                    Client ID: <code>{c.client_id}</code>
-                  </div>
+                  <div className="dim num">{c.client_id}</div>
                 </div>
-                <button
-                  type="button"
-                  className="btn btn-danger btn-sm"
-                  onClick={() => handleRevokeOAuth(c.client_id)}
-                >
+                <button type="button" className="btn btn-danger btn-sm" onClick={() => handleRevokeOAuth(c.client_id)}>
                   Revoke
                 </button>
               </div>
@@ -521,91 +547,20 @@ export function AiHubView({
         ) : null}
       </section>
 
-      {/* 4. Five AI Platform Setup Guides */}
-      <section className="stack-v">
-        <div className="row-wrap">
-          <Bot size={18} color="var(--gold)" />
-          <h2 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--gold)' }}>
-            Connect All 5 AI Assistants
-          </h2>
-        </div>
-
-        <div className="grid-2">
-          <article className="card stack-v" data-testid="ai-guide-gemini">
-            <h3 style={{ margin: 0, color: 'var(--gold)' }}>Google Gemini</h3>
-            <p className="muted" style={{ margin: 0 }}>
-              Connect Gemini CLI, Gemini Gems, or AI Studio using Remote Streamable HTTP MCP or OpenAPI / Context Bundle.
-            </p>
-            <div className="code-block">
-              MCP Endpoint: {origin}/mcp{'\n'}
-              OAuth Discovery: {origin}/.well-known/oauth-protected-resource{'\n'}
-              Context Bundle: Copy Context MD above for Gems/web chat
-            </div>
-          </article>
-
-          <article className="card stack-v" data-testid="ai-guide-claude">
-            <h3 style={{ margin: 0, color: 'var(--gold)' }}>Anthropic Claude</h3>
-            <p className="muted" style={{ margin: 0 }}>
-              Add a Custom Remote MCP Connector in Claude.ai / Claude Desktop / Claude Code with automatic OAuth 2.1 + PKCE + DCR discovery.
-            </p>
-            <div className="code-block">
-              Connector URL: {origin}/mcp{'\n'}
-              Auth: OAuth 2.1 + PKCE (auto-discovered via /.well-known/oauth-authorization-server)
-            </div>
-          </article>
-
-          <article className="card stack-v" data-testid="ai-guide-grok">
-            <h3 style={{ margin: 0, color: 'var(--gold)' }}>xAI Grok Bot</h3>
-            <p className="muted" style={{ margin: 0 }}>
-              Connect Grok Bot via Remote MCP or REST API v1 using a scoped Bearer API key (<code>propose</code> or <code>read</code>).
-            </p>
-            <div className="code-block">
-              MCP: {origin}/mcp{'\n'}
-              REST API: {origin}/api/v1/compounds{'\n'}
-              Header: Authorization: Bearer &lt;minted-api-key&gt;
-            </div>
-          </article>
-
-          <article className="card stack-v" data-testid="ai-guide-gpt">
-            <h3 style={{ margin: 0, color: 'var(--gold)' }}>OpenAI ChatGPT / GPT</h3>
-            <p className="muted" style={{ margin: 0 }}>
-              Connect via Remote MCP (Developer Mode) or import the OpenAPI 3.1.0 schema into Custom GPT Actions with OAuth 2.1 or API Key auth.
-            </p>
-            <div className="code-block">
-              OpenAPI 3.1 Schema: {origin}/openapi.json{'\n'}
-              MCP Endpoint: {origin}/mcp
-            </div>
-          </article>
-
-          <article className="card stack-v" data-testid="ai-guide-muse">
-            <h3 style={{ margin: 0, color: 'var(--gold)' }}>Meta Muse</h3>
-            <p className="muted" style={{ margin: 0 }}>
-              Connect Meta Muse via Remote MCP, OpenAPI connector (<code>/openapi.json</code>), <code>/llms.txt</code> discovery, or portable Context MD + Prompt Builder.
-            </p>
-            <div className="code-block">
-              Discovery: {origin}/llms.txt{'\n'}
-              OpenAPI: {origin}/openapi.json{'\n'}
-              MCP: {origin}/mcp
-            </div>
-          </article>
-        </div>
-      </section>
-
-      {/* 5. Recent Multi-AI Audit Log */}
       {auditLog.length > 0 ? (
-        <section className="card stack-v">
-          <div className="row-wrap">
-            <History size={16} color="var(--gold)" />
-            <h2 style={{ margin: 0, fontSize: '1.05rem', color: 'var(--gold)' }}>Recent Audit Trail</h2>
-          </div>
-          <div className="stack-v" style={{ gap: '0.4rem' }}>
+        <details className="card">
+          <summary className="row-wrap" style={{ cursor: 'pointer', fontWeight: 600 }}>
+            <History size={15} color="var(--accent)" />
+            <span>Recent Activity Log ({auditLog.length})</span>
+          </summary>
+          <div className="stack-sm" style={{ marginTop: '0.65rem' }}>
             {auditLog.slice(0, 10).map((entry, idx) => (
-              <div key={entry.id || idx} className="muted" style={{ fontSize: '0.82rem' }}>
-                <code>{entry.actor || 'system'}</code> • <strong>{entry.action}</strong> — {entry.summary || entry.targetId || ''}
+              <div key={entry.id || idx} className="dim">
+                <code style={{ color: 'var(--accent)' }}>{entry.actor || 'system'}</code> · {entry.summary || entry.action}
               </div>
             ))}
           </div>
-        </section>
+        </details>
       ) : null}
 
       {/* AI Research Prompt Builder Modal */}
@@ -613,41 +568,39 @@ export function AiHubView({
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="AI Research Prompt Builder">
           <div className="modal-card stack-v">
             <div className="space-between">
-              <h2 style={{ margin: 0, color: 'var(--gold)' }}>Universal AI Research Prompt Builder</h2>
-              <button type="button" className="btn btn-sm" onClick={() => setShowPromptModal(false)}>
-                Close
-              </button>
+              <div>
+                <div className="eyebrow">AI RESEARCH ASSISTANT</div>
+                <h2 className="display-sm">Research Prompt Builder</h2>
+              </div>
+              <button type="button" className="btn btn-sm" onClick={() => setShowPromptModal(false)}>Close</button>
             </div>
             <p className="muted" style={{ margin: 0 }}>
-              Generate a schema-strict research prompt including your custom section fields to paste into Gemini, Claude, Grok, ChatGPT, or Muse.
+              Type any compound below, copy the tailored prompt into Gemini, Claude, Grok, ChatGPT, or Muse, then paste its JSON reply back into AI Hub.
             </p>
-
-            <form onSubmit={handleGeneratePrompt} className="stack-v">
+            <form onSubmit={handleGeneratePrompt} className="stack-sm">
               <div className="grid-2">
                 <label className="field-label">
                   Compound Name
                   <input
                     type="text"
                     name="compoundName"
-                    placeholder="e.g., Thymosin Beta-4, Tretinoin, Magnesium"
+                    placeholder="e.g., Thymosin Beta-4, Azelaic Acid"
                     value={promptCompoundName}
                     onChange={(e) => setPromptCompoundName(e.target.value)}
                   />
                 </label>
                 <label className="field-label">
-                  Target Section
+                  Section
                   <select value={promptSectionId} onChange={(e) => setPromptSectionId(e.target.value)}>
                     {(sections || []).map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
+                      <option key={s.id} value={s.id}>{s.name}</option>
                     ))}
                   </select>
                 </label>
               </div>
               <div className="row-wrap">
                 <button type="submit" className="btn btn-primary btn-sm" disabled={promptLoading}>
-                  {promptLoading ? 'Generating…' : 'Generate Prompt'}
+                  {promptLoading ? 'Building…' : 'Generate Prompt'}
                 </button>
                 <button
                   type="button"
@@ -658,15 +611,9 @@ export function AiHubView({
                 </button>
               </div>
             </form>
-
             <label className="field-label">
-              Schema-Strict Research Prompt
-              <textarea
-                readOnly
-                rows={12}
-                value={generatedPrompt}
-                aria-label="Generated AI Research Prompt"
-              />
+              Ready-to-Paste Prompt
+              <textarea readOnly rows={11} value={generatedPrompt} aria-label="Generated AI Research Prompt" />
             </label>
           </div>
         </div>

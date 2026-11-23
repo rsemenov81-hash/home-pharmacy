@@ -25,7 +25,19 @@ export function bootstrapTokenFromUrl() {
         // ignore storage quota errors
       }
       url.searchParams.delete('token');
-      window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : '') + url.hash);
+      const cleanPath = url.pathname + (url.search ? url.search : '') + url.hash;
+      const scrubUrl = () => {
+        try {
+          window.history.replaceState({}, document.title, cleanPath);
+        } catch {
+          // ignore history errors
+        }
+      };
+      if (typeof document !== 'undefined' && document.readyState === 'loading') {
+        window.addEventListener('DOMContentLoaded', () => setTimeout(scrubUrl, 0), { once: true });
+      } else {
+        setTimeout(scrubUrl, 0);
+      }
       return memoryToken;
     }
     const stored = window.sessionStorage.getItem(TOKEN_STORAGE_KEY);

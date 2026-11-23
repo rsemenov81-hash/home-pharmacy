@@ -1,7 +1,38 @@
 import React, { useMemo, useState } from 'react';
-import { Plus, SlidersHorizontal, CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
-import { resolveEffectiveOwnership, CUSTOM_FIELD_TYPES, CANONICAL_ROUTES, CANONICAL_UNITS } from '../../core/index.js';
+import {
+  Plus,
+  SlidersHorizontal,
+  CheckCircle2,
+  Sparkles,
+  Syringe,
+  Flame,
+  Pill,
+  Droplets,
+  Layers,
+  Clock,
+} from 'lucide-react';
+import {
+  resolveEffectiveOwnership,
+  CUSTOM_FIELD_TYPES,
+  CANONICAL_ROUTES,
+  CANONICAL_UNITS,
+} from '../../core/index.js';
 import { api } from '../lib/api.js';
+
+const SECTION_META = {
+  peptides: { short: 'Peptides', Icon: Syringe },
+  peds: { short: 'PEDs', Icon: Flame },
+  vitamins_supplements: { short: 'Vitamins', Icon: Pill },
+  dermatology: { short: 'Dermatology', Icon: Droplets },
+};
+
+const OWN_LABEL = {
+  have: 'In Cabinet',
+  dont_have: "Don't Have",
+  wishlist: 'Wishlist',
+  low_stock: 'Low Stock',
+  ordered: 'Ordered',
+};
 
 function AddCompoundModal({ section, sections, onClose, onCreated }) {
   const [name, setName] = useState('');
@@ -9,7 +40,9 @@ function AddCompoundModal({ section, sections, onClose, onCreated }) {
   const [subsection, setSubsection] = useState('');
   const [summary, setSummary] = useState('');
   const [mechanismOfAction, setMechanismOfAction] = useState('');
-  const [route, setRoute] = useState(sectionId === 'dermatology' ? 'Topical' : sectionId === 'vitamins_supplements' ? 'Oral' : 'SubQ');
+  const [route, setRoute] = useState(
+    sectionId === 'dermatology' ? 'Topical' : sectionId === 'vitamins_supplements' ? 'Oral' : 'SubQ',
+  );
   const [defaultAmount, setDefaultAmount] = useState('');
   const [defaultUnit, setDefaultUnit] = useState(sectionId === 'peptides' ? 'mcg' : 'mg');
   const [rangeText, setRangeText] = useState('');
@@ -69,7 +102,7 @@ function AddCompoundModal({ section, sections, onClose, onCreated }) {
       await onCreated(res.json?.compound || res.json);
       onClose();
     } catch (err) {
-      setError(err.message || 'Validation failed — please check required fields.');
+      setError(err.message || 'Please check the required fields and try again.');
     } finally {
       setSaving(false);
     }
@@ -79,7 +112,10 @@ function AddCompoundModal({ section, sections, onClose, onCreated }) {
     <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Add Compound">
       <div className="modal-card stack-v">
         <div className="space-between">
-          <h2 style={{ margin: 0, color: 'var(--gold)' }}>Add Compound Profile</h2>
+          <div>
+            <div className="eyebrow">NEW PROFILE</div>
+            <h2 className="display-sm">Add Compound</h2>
+          </div>
           <button type="button" className="btn btn-sm" onClick={onClose}>
             Close
           </button>
@@ -98,7 +134,7 @@ function AddCompoundModal({ section, sections, onClose, onCreated }) {
               <input
                 type="text"
                 name="name"
-                placeholder="e.g., BPC-157, Thymosin Alpha-1"
+                placeholder="e.g., BPC-157, Tretinoin 0.05%"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
@@ -106,7 +142,15 @@ function AddCompoundModal({ section, sections, onClose, onCreated }) {
             </label>
             <label className="field-label">
               Section *
-              <select name="sectionId" value={sectionId} onChange={(e) => setSectionId(e.target.value)}>
+              <select
+                name="sectionId"
+                value={sectionId}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setSectionId(next);
+                  setRoute(next === 'dermatology' ? 'Topical' : next === 'vitamins_supplements' ? 'Oral' : 'SubQ');
+                }}
+              >
                 {sections.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
@@ -116,35 +160,12 @@ function AddCompoundModal({ section, sections, onClose, onCreated }) {
             </label>
           </div>
 
-          <div className="grid-2">
-            <label className="field-label">
-              Subsection
-              <input
-                type="text"
-                name="subsection"
-                placeholder="e.g., Healing & Tissue"
-                value={subsection}
-                onChange={(e) => setSubsection(e.target.value)}
-              />
-            </label>
-            <label className="field-label">
-              Route
-              <select name="route" value={route} onChange={(e) => setRoute(e.target.value)}>
-                {CANONICAL_ROUTES.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
           <label className="field-label">
-            Summary (What it is) *
+            What It Is (Summary) *
             <textarea
               name="summary"
               rows={2}
-              placeholder="Concise description of the compound and primary purpose"
+              placeholder="Concise overview of this compound and primary purpose…"
               value={summary}
               onChange={(e) => setSummary(e.target.value)}
               required
@@ -156,13 +177,23 @@ function AddCompoundModal({ section, sections, onClose, onCreated }) {
             <textarea
               name="mechanismOfAction"
               rows={2}
-              placeholder="Receptors, enzymes, or signaling pathways"
+              placeholder="Receptors, biological pathway, or topical action…"
               value={mechanismOfAction}
               onChange={(e) => setMechanismOfAction(e.target.value)}
             />
           </label>
 
           <div className="grid-3">
+            <label className="field-label">
+              Route
+              <select name="route" value={route} onChange={(e) => setRoute(e.target.value)}>
+                {CANONICAL_ROUTES.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className="field-label">
               Default Dose
               <input
@@ -184,51 +215,87 @@ function AddCompoundModal({ section, sections, onClose, onCreated }) {
                 ))}
               </select>
             </label>
+          </div>
+
+          <div className="grid-3">
+            <label className="field-label">
+              Dosage Range
+              <input
+                type="text"
+                name="rangeText"
+                placeholder="250–500 mcg"
+                value={rangeText}
+                onChange={(e) => setRangeText(e.target.value)}
+              />
+            </label>
+            <label className="field-label">
+              Half-Life
+              <input
+                type="text"
+                name="halfLife"
+                placeholder="e.g., ~4–6 hours"
+                value={halfLifeText}
+                onChange={(e) => setHalfLifeText(e.target.value)}
+              />
+            </label>
+            <label className="field-label">
+              Cycle Pattern
+              <input
+                type="text"
+                name="cycles"
+                placeholder="8 weeks on / 4 off"
+                value={cycleText}
+                onChange={(e) => setCycleText(e.target.value)}
+              />
+            </label>
+          </div>
+
+          <div className="grid-2">
+            <label className="field-label">
+              Category / Subsection
+              <input
+                type="text"
+                name="subsection"
+                placeholder="Optional category"
+                value={subsection}
+                onChange={(e) => setSubsection(e.target.value)}
+              />
+            </label>
             <label className="field-label">
               Frequency
               <input
                 type="text"
                 name="frequencyText"
+                placeholder="Daily, 3x/week, AM/PM…"
                 value={frequencyText}
                 onChange={(e) => setFrequencyText(e.target.value)}
               />
             </label>
           </div>
 
-          <div className="grid-3">
-            <label className="field-label">
-              Dosage Range
-              <input type="text" name="rangeText" placeholder="250-500 mcg" value={rangeText} onChange={(e) => setRangeText(e.target.value)} />
-            </label>
-            <label className="field-label">
-              Half-Life
-              <input type="text" name="halfLife" placeholder="~4 hours" value={halfLifeText} onChange={(e) => setHalfLifeText(e.target.value)} />
-            </label>
-            <label className="field-label">
-              Cycle Pattern
-              <input type="text" name="cycles" placeholder="6 weeks on, 2 off" value={cycleText} onChange={(e) => setCycleText(e.target.value)} />
-            </label>
-          </div>
-
           {(selectedSection?.customFields || []).length > 0 ? (
-            <div className="stack-v">
-              <strong style={{ fontSize: '0.85rem', color: 'var(--gold)' }}>Section Custom Fields</strong>
-              {selectedSection.customFields.map((cf) => (
-                <label key={cf.key} className="field-label">
-                  {cf.label} {cf.required ? '*' : ''}
-                  <input
-                    type={cf.fieldType === 'number' ? 'number' : cf.fieldType === 'url' ? 'url' : 'text'}
-                    name={`custom_${cf.key}`}
-                    value={customValues[cf.key] ?? ''}
-                    onChange={(e) =>
-                      setCustomValues((prev) => ({
-                        ...prev,
-                        [cf.key]: cf.fieldType === 'number' ? Number(e.target.value) : e.target.value,
-                      }))
-                    }
-                  />
-                </label>
-              ))}
+            <div className="card-subtle stack-sm">
+              <div className="eyebrow">CUSTOM SECTION FIELDS</div>
+              <div className="grid-2">
+                {selectedSection.customFields.map((cf) => (
+                  <label key={cf.key} className="field-label">
+                    {cf.label}
+                    {cf.required ? ' *' : ''}
+                    <input
+                      type={cf.fieldType === 'number' ? 'number' : cf.fieldType === 'url' ? 'url' : 'text'}
+                      name={`custom_${cf.key}`}
+                      placeholder={cf.aiResearchInstruction || cf.label}
+                      value={customValues[cf.key] ?? ''}
+                      onChange={(e) =>
+                        setCustomValues((prev) => ({
+                          ...prev,
+                          [cf.key]: cf.fieldType === 'number' ? Number(e.target.value) : e.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
             </div>
           ) : null}
 
@@ -249,96 +316,104 @@ function AddCompoundModal({ section, sections, onClose, onCreated }) {
 function CustomizeSectionModal({ section, onClose, onSaved }) {
   const [aiResearchPrompt, setAiResearchPrompt] = useState(section.aiResearchPrompt || '');
   const [customFields, setCustomFields] = useState(section.customFields || []);
-  const [subsections, setSubsections] = useState(section.subsections || []);
-  const [newKey, setNewKey] = useState('');
-  const [newLabel, setNewLabel] = useState('');
-  const [newType, setNewType] = useState('text');
-  const [newOptions, setNewOptions] = useState('');
-  const [newRequired, setNewRequired] = useState(false);
-  const [newSub, setNewSub] = useState('');
+  const [fieldKey, setFieldKey] = useState('');
+  const [fieldLabel, setFieldLabel] = useState('');
+  const [fieldType, setFieldType] = useState('text');
+  const [fieldRequired, setFieldRequired] = useState(false);
+  const [fieldOptions, setFieldOptions] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
   const handleAddField = () => {
     setError('');
-    const key = (newKey || newLabel.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')).trim();
-    const label = (newLabel || newKey).trim();
+    const key = (fieldKey || fieldLabel)
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+    const label = fieldLabel.trim() || key;
     if (!key || !/^[a-z][a-z0-9_]*$/.test(key)) {
-      setError('Custom field key must start with a lowercase letter and use only a-z, 0-9, _.');
+      setError('Field key must start with a letter and use lowercase letters, numbers, or underscores.');
       return;
     }
-    if (!label) {
-      setError('Custom field label is required.');
+    if (customFields.some((f) => f.key === key)) {
+      setError(`Field "${key}" already exists.`);
       return;
     }
     const def = {
       key,
       label,
-      fieldType: newType,
-      required: newRequired,
+      fieldType,
+      required: fieldRequired,
       showOnCard: true,
     };
-    if (newType === 'select' || newType === 'multiselect') {
-      const opts = newOptions
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
+    if (fieldType === 'select' || fieldType === 'multiselect') {
+      const opts = fieldOptions.split(',').map((s) => s.trim()).filter(Boolean);
       if (opts.length === 0) {
-        setError('Select/multiselect fields require comma-separated options.');
+        setError('Provide comma-separated options for select fields.');
         return;
       }
       def.options = opts;
     }
-    setCustomFields((prev) => [...prev.filter((f) => f.key !== key), def]);
-    setNewKey('');
-    setNewLabel('');
-    setNewOptions('');
-    setNewRequired(false);
+    setCustomFields([...customFields, def]);
+    setFieldKey('');
+    setFieldLabel('');
+    setFieldOptions('');
+    setFieldRequired(false);
+  };
+
+  const handleRemoveField = (key) => {
+    setCustomFields(customFields.filter((f) => f.key !== key));
   };
 
   const handleSave = async (e) => {
     e.preventDefault();
     setError('');
-    // If user typed a new field into the inputs and clicked Save directly without clicking Add Field first, include it!
-    let finalFields = [...customFields];
-    if (newKey.trim() || newLabel.trim()) {
-      const key = (newKey.trim() || newLabel.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, ''));
-      const label = (newLabel.trim() || newKey.trim());
-      if (key && /^[a-z][a-z0-9_]*$/.test(key) && label && !finalFields.some((f) => f.key === key)) {
-        const def = { key, label, fieldType: newType, required: newRequired, showOnCard: true };
-        if (newType === 'select' || newType === 'multiselect') {
-          def.options = newOptions.split(',').map((s) => s.trim()).filter(Boolean);
-        }
-        finalFields.push(def);
-      }
-    }
-
-    let finalSubs = [...subsections];
-    if (newSub.trim() && !finalSubs.includes(newSub.trim())) {
-      finalSubs.push(newSub.trim());
-    }
-
     setSaving(true);
     try {
+      let nextFields = [...customFields];
+      if (fieldKey.trim() || fieldLabel.trim()) {
+        const key = (fieldKey || fieldLabel)
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9_]+/g, '_')
+          .replace(/^_+|_+$/g, '');
+        if (key && /^[a-z][a-z0-9_]*$/.test(key) && !nextFields.some((f) => f.key === key)) {
+          const def = {
+            key,
+            label: fieldLabel.trim() || key,
+            fieldType,
+            required: fieldRequired,
+            showOnCard: true,
+          };
+          if (fieldType === 'select' || fieldType === 'multiselect') {
+            const opts = fieldOptions.split(',').map((s) => s.trim()).filter(Boolean);
+            if (opts.length > 0) def.options = opts;
+          }
+          nextFields.push(def);
+        }
+      }
       await api.patch(`/api/v1/sections/${encodeURIComponent(section.id)}`, {
         aiResearchPrompt,
-        customFields: finalFields,
-        subsections: finalSubs,
+        customFields: nextFields,
       });
       await onSaved();
       onClose();
     } catch (err) {
-      setError(err.message || 'Failed to update section configuration.');
+      setError(err.message || 'Could not save section changes.');
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={`Customize ${section.name} Section`}>
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={`Customize ${section.name}`}>
       <div className="modal-card stack-v">
         <div className="space-between">
-          <h2 style={{ margin: 0, color: 'var(--gold)' }}>Customize Section: {section.name}</h2>
+          <div>
+            <div className="eyebrow">SECTION TEMPLATE</div>
+            <h2 className="display-sm">Customize {section.name}</h2>
+          </div>
           <button type="button" className="btn btn-sm" onClick={onClose}>
             Close
           </button>
@@ -352,58 +427,67 @@ function CustomizeSectionModal({ section, onClose, onSaved }) {
 
         <form onSubmit={handleSave} className="stack-v">
           <label className="field-label">
-            AI Research Prompt (injected into MCP &amp; AI Prompt Builder)
+            AI Research Instructions for This Section
             <textarea
               name="aiResearchPrompt"
               rows={3}
               value={aiResearchPrompt}
               onChange={(e) => setAiResearchPrompt(e.target.value)}
+              placeholder="Tell your AIs what specific details to fill out for compounds in this section…"
             />
           </label>
 
-          <div className="stack-v" style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
-            <strong style={{ color: 'var(--gold)' }}>Custom Fields ({customFields.length})</strong>
-            {customFields.map((f) => (
-              <div key={f.key} className="space-between" style={{ padding: '0.35rem 0.5rem', background: 'var(--bg-card)', borderRadius: 8 }}>
-                <span>
-                  <strong>{f.label}</strong> <code>({f.key}: {f.fieldType})</code>
-                </span>
-                <button
-                  type="button"
-                  className="btn btn-sm btn-danger"
-                  onClick={() => setCustomFields((prev) => prev.filter((x) => x.key !== f.key))}
-                >
-                  Remove
-                </button>
-              </div>
-            ))}
+          <div className="stack-sm">
+            <div className="eyebrow">CUSTOM FIELDS ({customFields.length})</div>
+            {customFields.length === 0 ? (
+              <p className="muted" style={{ margin: 0 }}>
+                No custom fields added yet. Add any extra data you want tracked for this section.
+              </p>
+            ) : (
+              customFields.map((f) => (
+                <div key={f.key} className="card-subtle space-between">
+                  <div>
+                    <strong>{f.label}</strong>{' '}
+                    <span className="pill num">{f.key}</span>{' '}
+                    <span className="pill">{f.fieldType}</span>
+                    {f.required ? <span className="pill pill-accent" style={{ marginLeft: 4 }}>Required</span> : null}
+                  </div>
+                  <button type="button" className="btn btn-sm btn-danger" onClick={() => handleRemoveField(f.key)}>
+                    Archive
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
 
+          <div className="card-subtle stack-sm">
+            <div className="eyebrow">ADD FIELD</div>
             <div className="grid-2">
-              <label className="field-label">
-                Field Label
-                <input
-                  type="text"
-                  name="fieldLabel"
-                  placeholder="e.g., Third-Party Lab"
-                  value={newLabel}
-                  onChange={(e) => setNewLabel(e.target.value)}
-                />
-              </label>
               <label className="field-label">
                 Field Key
                 <input
                   type="text"
                   name="fieldKey"
-                  placeholder="e.g., third_party_lab"
-                  value={newKey}
-                  onChange={(e) => setNewKey(e.target.value)}
+                  placeholder="e.g., batch_number"
+                  value={fieldKey}
+                  onChange={(e) => setFieldKey(e.target.value)}
+                />
+              </label>
+              <label className="field-label">
+                Display Label
+                <input
+                  type="text"
+                  name="fieldLabel"
+                  placeholder="e.g., Batch Number"
+                  value={fieldLabel}
+                  onChange={(e) => setFieldLabel(e.target.value)}
                 />
               </label>
             </div>
             <div className="grid-2">
               <label className="field-label">
-                Field Type
-                <select name="fieldType" value={newType} onChange={(e) => setNewType(e.target.value)}>
+                Type
+                <select name="fieldType" value={fieldType} onChange={(e) => setFieldType(e.target.value)}>
                   {CUSTOM_FIELD_TYPES.map((t) => (
                     <option key={t} value={t}>
                       {t}
@@ -411,58 +495,39 @@ function CustomizeSectionModal({ section, onClose, onSaved }) {
                   ))}
                 </select>
               </label>
-              <label className="field-label" style={{ justifyContent: 'flex-end' }}>
-                <span className="row-wrap">
-                  <input type="checkbox" checked={newRequired} onChange={(e) => setNewRequired(e.target.checked)} />
-                  Required field
-                </span>
+              <label className="toggle-chip" style={{ alignSelf: 'end', height: 40 }}>
+                <input
+                  type="checkbox"
+                  checked={fieldRequired}
+                  onChange={(e) => setFieldRequired(e.target.checked)}
+                />
+                <span>Required field</span>
               </label>
             </div>
-            {(newType === 'select' || newType === 'multiselect') ? (
+            {fieldType === 'select' || fieldType === 'multiselect' ? (
               <label className="field-label">
                 Options (comma-separated)
-                <input type="text" value={newOptions} onChange={(e) => setNewOptions(e.target.value)} placeholder="Option A, Option B" />
+                <input
+                  type="text"
+                  placeholder="Option A, Option B"
+                  value={fieldOptions}
+                  onChange={(e) => setFieldOptions(e.target.value)}
+                />
               </label>
             ) : null}
             <div>
               <button type="button" className="btn btn-sm" onClick={handleAddField}>
-                + Add Custom Field
+                + Add Field
               </button>
             </div>
           </div>
-
-          <label className="field-label">
-            Add Subsection
-            <div className="row-wrap">
-              <input
-                type="text"
-                name="subsection"
-                placeholder="New subsection name"
-                value={newSub}
-                onChange={(e) => setNewSub(e.target.value)}
-                style={{ flex: 1 }}
-              />
-              <button
-                type="button"
-                className="btn btn-sm"
-                onClick={() => {
-                  if (newSub.trim() && !subsections.includes(newSub.trim())) {
-                    setSubsections((p) => [...p, newSub.trim()]);
-                    setNewSub('');
-                  }
-                }}
-              >
-                Add
-              </button>
-            </div>
-          </label>
 
           <div className="row-wrap" style={{ justifyContent: 'flex-end' }}>
             <button type="button" className="btn" onClick={onClose}>
               Cancel
             </button>
             <button type="submit" className="btn btn-primary" disabled={saving}>
-              {saving ? 'Saving…' : 'Save Section Schema'}
+              {saving ? 'Saving…' : 'Save Section'}
             </button>
           </div>
         </form>
@@ -485,16 +550,24 @@ export function SectionsView({
   const [statusFilter, setStatusFilter] = useState('all');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showCustomizeModal, setShowCustomizeModal] = useState(false);
+  const [seeding, setSeeding] = useState(false);
 
   const activeSection = useMemo(
     () => sections.find((s) => s.id === activeSectionId) || sections[0] || null,
     [sections, activeSectionId],
   );
 
+  const countBySection = useMemo(() => {
+    const m = {};
+    for (const c of compounds || []) {
+      m[c.sectionId] = (m[c.sectionId] || 0) + 1;
+    }
+    return m;
+  }, [compounds]);
+
   const filteredCompounds = useMemo(() => {
     const q = (searchQuery || '').trim().toLowerCase();
     return (compounds || []).filter((c) => {
-      // When global search is active, search across ALL sections; otherwise filter by active section
       if (!q && activeSection && c.sectionId !== activeSection.id) return false;
       if (statusFilter !== 'all' && c.profileStatus !== statusFilter) return false;
       if (ownershipFilter !== 'all') {
@@ -523,17 +596,32 @@ export function SectionsView({
     });
   }, [compounds, activeSection, ownershipFilter, statusFilter, activeMemberId, ownership, searchQuery]);
 
+  const handleSeedStarter = async () => {
+    setSeeding(true);
+    try {
+      await api.post('/api/v1/seed/starter', {});
+      await onRefresh();
+    } finally {
+      setSeeding(false);
+    }
+  };
+
   return (
     <div className="stack-v">
-      <div className="space-between">
+      {/* Clean iOS Large Header */}
+      <div className="space-between" style={{ alignItems: 'flex-end' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: '1.45rem' }}>
-            {searchQuery.trim() ? `Search Results: "${searchQuery}"` : activeSection?.name || 'Health Sections'}
+          <div className="eyebrow">
+            {searchQuery.trim() ? 'GLOBAL SEARCH' : 'COMPOUND LIBRARY'}
+          </div>
+          <h1 className="display-title" style={{ marginTop: 4 }}>
+            {searchQuery.trim() ? `“${searchQuery}”` : activeSection?.name || 'Health Library'}
           </h1>
-          <p className="muted" style={{ margin: '0.2rem 0 0' }}>
-            {activeSection?.description || 'Shared household compound reference catalog across all sections.'}
+          <p className="muted" style={{ margin: '0.3rem 0 0', maxWidth: 620 }}>
+            {activeSection?.description || 'Curated profiles across peptides, PEDs, vitamins & supplements, and dermatology.'}
           </p>
         </div>
+
         <div className="row-wrap">
           {activeSection ? (
             <button
@@ -542,7 +630,7 @@ export function SectionsView({
               data-testid="btn-customize-section"
               onClick={() => setShowCustomizeModal(true)}
             >
-              <SlidersHorizontal size={14} /> Customize Section
+              <SlidersHorizontal size={14} /> Customize
             </button>
           ) : null}
           <button
@@ -556,77 +644,88 @@ export function SectionsView({
         </div>
       </div>
 
-      {/* 4 Core Sections + Custom Section Tabs */}
-      <div className="section-tabs" role="tablist" aria-label="Health Sections">
-        {(sections || []).map((sec) => {
-          const count = (compounds || []).filter((c) => c.sectionId === sec.id).length;
-          return (
-            <button
-              key={sec.id}
-              type="button"
-              role="tab"
-              aria-selected={activeSectionId === sec.id}
-              data-testid={`section-tab-${sec.id}`}
-              className={`tab-btn${activeSectionId === sec.id ? ' active' : ''}`}
-              onClick={() => setActiveSectionId(sec.id)}
-            >
-              {sec.name} ({count})
-            </button>
-          );
-        })}
-      </div>
+      {/* Segmented Section Tabs + Compact Filters */}
+      <div className="space-between">
+        <div className="section-tabs" role="tablist" aria-label="Health Sections">
+          {(sections || []).map((sec) => {
+            const meta = SECTION_META[sec.id] || { short: sec.name, Icon: Layers };
+            const Icon = meta.Icon;
+            const cnt = countBySection[sec.id] || 0;
+            return (
+              <button
+                key={sec.id}
+                type="button"
+                role="tab"
+                aria-selected={activeSection?.id === sec.id}
+                data-testid={`section-tab-${sec.id}`}
+                className={`tab-btn${activeSection?.id === sec.id ? ' active' : ''}`}
+                onClick={() => setActiveSectionId(sec.id)}
+              >
+                <Icon size={14} />
+                <span>{sec.name}</span>
+                {cnt > 0 ? <span className="tab-count">{cnt}</span> : null}
+              </button>
+            );
+          })}
+        </div>
 
-      {/* Filters */}
-      <div className="row-wrap">
-        <select
-          data-testid="filter-ownership"
-          aria-label="Filter by ownership status"
-          value={ownershipFilter}
-          onChange={(e) => setOwnershipFilter(e.target.value)}
-        >
-          <option value="all">All Ownership</option>
-          <option value="have">Have</option>
-          <option value="dont_have">Don&apos;t Have</option>
-          <option value="wishlist">Wishlist</option>
-          <option value="low_stock">Low Stock</option>
-          <option value="ordered">Ordered</option>
-        </select>
+        <div className="row-wrap">
+          <select
+            data-testid="filter-ownership"
+            aria-label="Filter by ownership"
+            value={ownershipFilter}
+            onChange={(e) => setOwnershipFilter(e.target.value)}
+            style={{ padding: '0.42rem 0.7rem', fontSize: '0.82rem' }}
+          >
+            <option value="all">All Stock</option>
+            <option value="have">In Cabinet</option>
+            <option value="dont_have">Don&apos;t Have</option>
+            <option value="wishlist">Wishlist</option>
+            <option value="low_stock">Low Stock</option>
+            <option value="ordered">Ordered</option>
+          </select>
 
-        <select
-          data-testid="filter-status"
-          aria-label="Filter by profile verification status"
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-        >
-          <option value="all">All Statuses</option>
-          <option value="verified">Verified</option>
-          <option value="ai_draft">AI Draft</option>
-          <option value="needs_review">Needs Review</option>
-        </select>
+          <select
+            data-testid="filter-status"
+            aria-label="Filter by review status"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            style={{ padding: '0.42rem 0.7rem', fontSize: '0.82rem' }}
+          >
+            <option value="all">All Profiles</option>
+            <option value="verified">Verified</option>
+            <option value="ai_draft">AI Draft</option>
+            <option value="needs_review">Needs Review</option>
+          </select>
+        </div>
       </div>
 
       {/* Compound Grid */}
       {filteredCompounds.length === 0 ? (
-        <div className="card stack-v" style={{ textAlign: 'center', padding: '2rem', alignItems: 'center' }}>
-          <p className="muted" style={{ margin: 0 }}>
+        <div className="glass stack-v" style={{ textAlign: 'center', padding: '2.6rem 1.4rem', alignItems: 'center' }}>
+          <div className="eyebrow">
+            {(compounds || []).length === 0 ? 'GET STARTED' : 'NO MATCHES'}
+          </div>
+          <h2 className="display-sm">
+            {(compounds || []).length === 0 ? 'Your Library Is Ready' : 'Nothing matches this filter'}
+          </h2>
+          <p className="muted" style={{ margin: 0, maxWidth: 460 }}>
             {(compounds || []).length === 0
-              ? 'Your household catalog is clean and ready. Add your first compound, paste AI-researched JSON, or load 26 generic starter reference profiles across all 4 sections.'
-              : 'No compounds match this section and filter yet.'}
+              ? 'Load 26 curated reference profiles across Peptides, PEDs, Vitamins, and Dermatology — or add your first compound.'
+              : 'Try switching sections, clearing search, or resetting your stock filter.'}
           </p>
           {(compounds || []).length === 0 ? (
-            <div className="row-wrap" style={{ justifyContent: 'center' }}>
+            <div className="row-wrap" style={{ justifyContent: 'center', marginTop: 4 }}>
               <button
                 type="button"
-                className="btn btn-primary btn-sm"
-                onClick={async () => {
-                  await api.post('/api/v1/seed/starter', {});
-                  await onRefresh();
-                }}
+                className="btn btn-primary"
+                disabled={seeding}
+                onClick={handleSeedStarter}
               >
-                <Sparkles size={14} /> Load 26 Starter Reference Profiles
+                <Sparkles size={15} /> {seeding ? 'Loading Library…' : 'Load 26 Starter Reference Profiles'}
               </button>
-              <button type="button" className="btn btn-sm" onClick={() => setShowAddModal(true)}>
-                <Plus size={14} /> Add Compound
+              <button type="button" className="btn" onClick={() => setShowAddModal(true)}>
+                <Plus size={15} /> Add Compound
               </button>
             </div>
           ) : null}
@@ -636,6 +735,18 @@ export function SectionsView({
           {filteredCompounds.map((cmp) => {
             const effOwn = resolveEffectiveOwnership(cmp.id, activeMemberId, ownership || []);
             const ownStatus = effOwn?.status || 'dont_have';
+            const shortDose =
+              cmp.dosages?.defaultAmount != null && cmp.dosages?.defaultUnit
+                ? `${cmp.dosages.defaultAmount} ${cmp.dosages.defaultUnit}`
+                : (cmp.dosages?.rangeText || '').split('(')[0].split(',')[0].trim().slice(0, 24);
+            const shortHl =
+              typeof cmp.halfLife?.valueHours === 'number' && Number.isFinite(cmp.halfLife.valueHours)
+                ? cmp.halfLife.valueHours >= 48
+                  ? `t½ ~${Number((cmp.halfLife.valueHours / 24).toFixed(1))}d`
+                  : `t½ ~${Number(cmp.halfLife.valueHours.toFixed(1))}h`
+                : cmp.halfLife?.displayText
+                  ? cmp.halfLife.displayText.split('(')[0].split('—')[0].trim().slice(0, 18)
+                  : '';
             return (
               <article
                 key={cmp.id}
@@ -644,26 +755,44 @@ export function SectionsView({
                 data-slug={cmp.slug}
                 onClick={() => onSelectCompound(cmp.id)}
               >
-                <div className="space-between">
-                  <strong style={{ fontSize: '1rem', color: 'var(--text)' }}>{cmp.name}</strong>
-                  <span className={`pill pill-${ownStatus}`}>{ownStatus.replace(/_/g, ' ')}</span>
-                </div>
-                <div className="row-wrap">
-                  {cmp.subsection ? <span className="pill">{cmp.subsection}</span> : null}
-                  {cmp.dosages?.route ? <span className="pill">{cmp.dosages.route}</span> : null}
-                  <span className={`pill pill-${cmp.profileStatus}`}>
-                    {cmp.profileStatus === 'verified' ? <CheckCircle2 size={11} /> : <Sparkles size={11} />}
-                    {cmp.profileStatus}
+                <div className="space-between" style={{ alignItems: 'flex-start', gap: '0.4rem' }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <h3 style={{ fontSize: '1rem', lineHeight: 1.25 }}>{cmp.name}</h3>
+                    {cmp.subsection ? (
+                      <div className="dim" style={{ marginTop: 2 }}>{cmp.subsection}</div>
+                    ) : null}
+                  </div>
+                  <span className={`pill pill-${ownStatus}`}>
+                    {OWN_LABEL[ownStatus] || ownStatus}
                   </span>
                 </div>
-                <p className="muted" style={{ margin: 0 }}>
-                  {cmp.summary || cmp.mechanismOfAction || 'No summary yet.'}
+
+                <p className="muted clamp-2" style={{ margin: 0 }}>
+                  {cmp.summary || cmp.mechanismOfAction || 'Tap to view full monograph.'}
                 </p>
-                {cmp.dosages?.rangeText ? (
-                  <div className="num" style={{ fontSize: '0.8rem', color: 'var(--gold)' }}>
-                    Dose: {cmp.dosages.rangeText}
-                  </div>
-                ) : null}
+
+                <div className="row-wrap" style={{ marginTop: 'auto', paddingTop: '0.45rem', borderTop: '1px solid var(--border-subtle)' }}>
+                  {shortDose ? (
+                    <span className="pill pill-accent num">{shortDose}</span>
+                  ) : null}
+                  {cmp.dosages?.route ? (
+                    <span className="pill">{cmp.dosages.route}</span>
+                  ) : null}
+                  {shortHl ? (
+                    <span className="pill num">
+                      <Clock size={10} /> {shortHl}
+                    </span>
+                  ) : null}
+                  {cmp.profileStatus !== 'verified' ? (
+                    <span className={`pill pill-${cmp.profileStatus}`}>
+                      <Sparkles size={10} /> {cmp.profileStatus === 'ai_draft' ? 'AI Draft' : 'Review'}
+                    </span>
+                  ) : (
+                    <span className="pill pill-verified" title="Verified">
+                      <CheckCircle2 size={10} /> Verified
+                    </span>
+                  )}
+                </div>
               </article>
             );
           })}

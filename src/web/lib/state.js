@@ -42,6 +42,8 @@ export function saveTheme(theme) {
   }
   if (typeof document !== 'undefined') {
     document.documentElement.setAttribute('data-theme', t);
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', t === 'light' ? '#f3f1ea' : '#0c221b');
   }
   return t;
 }

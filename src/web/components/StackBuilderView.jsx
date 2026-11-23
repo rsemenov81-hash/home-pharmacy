@@ -1,7 +1,28 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, AlertOctagon, AlertTriangle, Pin, CheckCircle2, Sparkles, FlaskConical } from 'lucide-react';
+import {
+  Plus,
+  AlertOctagon,
+  AlertTriangle,
+  Pin,
+  CheckCircle2,
+  Sparkles,
+  FlaskConical,
+  Sun,
+  Moon,
+  Scissors,
+  Check,
+  Search,
+} from 'lucide-react';
 import { SYSTEMIC_SLOTS, dkToday } from '../../core/index.js';
 import { api } from '../lib/api.js';
+
+const PICKER_SECTIONS = [
+  { id: 'all', label: 'All' },
+  { id: 'peptides', label: 'Peptides' },
+  { id: 'peds', label: 'PEDs' },
+  { id: 'vitamins_supplements', label: 'Vitamins' },
+  { id: 'dermatology', label: 'Dermatology' },
+];
 
 export function StackBuilderView({
   members,
@@ -18,9 +39,12 @@ export function StackBuilderView({
   const [loadingSpread, setLoadingSpread] = useState(false);
   const [showNewStack, setShowNewStack] = useState(false);
   const [newStackName, setNewStackName] = useState('');
-  const [pinEditingId, setPinEditingId] = useState(null);
+  const [pinEditingItem, setPinEditingItem] = useState(null);
+  const [pinDraftSlot, setPinDraftSlot] = useState('');
   const [statusMsg, setStatusMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [pickerSection, setPickerSection] = useState('all');
+  const [pickerQuery, setPickerQuery] = useState('');
   const [optimisticItemsByStack, setOptimisticItemsByStack] = useState({});
   const [optimisticStacks, setOptimisticStacks] = useState([]);
 
@@ -110,6 +134,17 @@ export function StackBuilderView({
     [effectiveItems],
   );
 
+  const visiblePickerCompounds = useMemo(() => {
+    const q = pickerQuery.trim().toLowerCase();
+    return (compounds || []).filter((c) => {
+      if (pickerSection !== 'all' && c.sectionId !== pickerSection) return false;
+      if (q && !`${c.name} ${c.subsection || ''} ${(c.aliases || []).join(' ')}`.toLowerCase().includes(q)) {
+        return false;
+      }
+      return true;
+    });
+  }, [compounds, pickerSection, pickerQuery]);
+
   const enqueueStackMutation = (fn) => {
     pendingOpsRef.current += 1;
     const run = queueRef.current.catch(() => {}).then(async () => {
@@ -145,7 +180,7 @@ export function StackBuilderView({
         setOptimisticStacks((prev) => [...prev.filter((s) => s.id !== created.id), created]);
         setSelectedStackId(created.id);
       }
-      setStatusMsg(`Created stack "${clean}".`);
+      setStatusMsg(`Created stack “${clean}”.`);
       await onRefresh();
     } catch (err) {
       setErrorMsg(err.message || 'Could not create stack.');
@@ -156,7 +191,7 @@ export function StackBuilderView({
     setErrorMsg('');
     if (whatIfEnabled) {
       setWhatIfIds((prev) => (prev.includes(compound.id) ? prev : [...prev, compound.id]));
-      setStatusMsg(`Added "${compound.name}" to What-If preview (non-mutating).`);
+      setStatusMsg(`Previewing “${compound.name}” in What-If mode (stack unchanged).`);
       return;
     }
 
@@ -185,9 +220,11 @@ export function StackBuilderView({
             active: true,
             items: [],
           });
-          targetId = createdRes.json?.stack?.id;
+          const created = createdRes.json?.stack;
+          targetId = created?.id;
           if (targetId) {
             latestItemsByStackRef.current.set(targetId, [newItem]);
+            setOptimisticStacks((prev) => [...prev.filter((s) => s.id !== targetId), created]);
             setSelectedStackId(targetId);
           }
         }
@@ -198,7 +235,7 @@ export function StackBuilderView({
           { items: nextItems },
         );
         setSelectedStackId(targetId);
-        setStatusMsg(`Added "${compound.name}" to stack.`);
+        setStatusMsg(`Added “${compound.name}” to stack.`);
       } catch (err) {
         setErrorMsg(err.message || 'Could not add compound to stack.');
       }
@@ -236,12 +273,12 @@ export function StackBuilderView({
         );
         await onRefresh();
       } catch {
-        // local state already toggled
+        // local toggle already applied
       }
     }
   };
 
-  const handlePinSlot = async (compoundId, slotId) => {
+  const handlePinSlot = async (compoundId, slotId, { close = false } = {}) => {
     if (!activeStack) return;
     const memberSnapshot = activeMemberId;
     const targetId = activeStack.id;
@@ -251,6 +288,7 @@ export function StackBuilderView({
     );
     latestItemsByStackRef.current.set(targetId, nextItems);
     setOptimisticItemsByStack((prev) => ({ ...prev, [targetId]: nextItems }));
+    if (close) setPinEditingItem(null);
 
     await enqueueStackMutation(async () => {
       try {
@@ -258,8 +296,7 @@ export function StackBuilderView({
           `/api/v1/members/${encodeURIComponent(memberSnapshot)}/stacks/${encodeURIComponent(targetId)}`,
           { items: latestItemsByStackRef.current.get(targetId) || nextItems },
         );
-        setPinEditingId(null);
-        setStatusMsg(slotId ? `Pinned item to ${slotId.replace(/_/g, ' ')}.` : 'Unpinned item override.');
+        setStatusMsg(slotId ? `Pinned to ${slotId.replace(/_/g, ' ')}.` : 'Returned to smart auto-timing.');
       } catch (err) {
         setErrorMsg(err.message || 'Failed to pin slot.');
       }
@@ -282,135 +319,134 @@ export function StackBuilderView({
         takenAt: new Date().toISOString(),
         skipped: false,
       });
-      setStatusMsg(`Logged ${doseAmount} ${doseUnit} ${item.name} (${slotId}).`);
+      setStatusMsg(`Logged ${doseAmount} ${doseUnit} ${item.name}.`);
       await onRefresh();
     } catch (err) {
       setErrorMsg(err.message || 'Could not log dose.');
     }
   };
 
-  const hardStops = spread?.interactions?.hardStops || [];
-  const autoSeparated = spread?.interactions?.autoSeparated || [];
-  const alternateDayPairs = spread?.interactions?.alternateDayPairs || [];
-  const cautions = spread?.interactions?.cautions || [];
-  const ulWarnings = spread?.interactions?.ulWarnings || [];
-  const synergies = spread?.interactions?.synergies || [];
-  const safetyAlerts = spread?.interactions?.safetyAlerts || [];
+  const interactions = spread?.interactions || {};
+  const hardStops = interactions.hardStops || [];
+  const autoSeparated = interactions.autoSeparated || [];
+  const alternateDayPairs = interactions.alternateDayPairs || [];
+  const ulWarnings = interactions.ulWarnings || [];
+  const safetyAlerts = interactions.safetyAlerts || [];
+  const cautions = interactions.cautions || [];
+  const synergies = interactions.synergies || [];
   const missingSpf = spread?.dermatology?.skin?.missingSpfWarning || null;
-  const microNotes = spread?.dermatology?.skin?.microneedlingBufferNotes || [];
+  const microneedlingNotes = spread?.dermatology?.skin?.microneedlingBufferNotes || [];
+  const slots = spread?.systemic?.slots || SYSTEMIC_SLOTS.map((s) => ({ slotId: s.id, label: s.label, suggestedTime: '—', items: [] }));
 
   return (
     <div className="stack-v">
-      <div className="space-between">
+      {/* Header */}
+      <div className="space-between" style={{ alignItems: 'flex-end' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: '1.45rem' }}>
-            Stack Builder &amp; Smart Spreader — {activeMember?.name || activeMemberId}
-          </h1>
-          <p className="muted" style={{ margin: '0.2rem 0 0' }}>
-            Pick compounds across all 4 sections. The dual-track solver separates conflicts, co-locates synergies, and organizes Systemic + Dermatology routines.
+          <div className="eyebrow">{activeMember?.name || 'MEMBER'} PROTOCOL</div>
+          <h1 className="display-title" style={{ marginTop: 4 }}>Stack &amp; Smart Schedule</h1>
+          <p className="muted" style={{ margin: '0.25rem 0 0' }}>
+            Automatically arranges your peptides, PEDs, vitamins, and skincare around timing, food state, and interactions.
           </p>
         </div>
 
+        <button
+          type="button"
+          className="btn btn-primary btn-sm"
+          data-testid="btn-new-stack"
+          onClick={() => setShowNewStack(true)}
+        >
+          <Plus size={14} /> New Stack
+        </button>
+      </div>
+
+      {/* Sleek Control Bar */}
+      <div className="card space-between">
         <div className="row-wrap">
           <select
             data-testid="stack-selector"
             aria-label="Select stack"
             value={activeStack?.id || ''}
             onChange={(e) => setSelectedStackId(e.target.value)}
+            style={{ minWidth: 200, fontWeight: 600 }}
           >
-            {memberStacks.length === 0 ? <option value="">No stacks yet</option> : null}
-            {memberStacks.map((st) => (
-              <option key={st.id} value={st.id}>
-                {st.name} ({(st.items || []).length} items)
-              </option>
-            ))}
+            {memberStacks.length === 0 ? (
+              <option value="">No stacks yet — tap + New Stack</option>
+            ) : (
+              memberStacks.map((st) => (
+                <option key={st.id} value={st.id}>
+                  {st.name} ({(st.items || []).length})
+                </option>
+              ))
+            )}
           </select>
 
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            data-testid="btn-new-stack"
-            onClick={() => setShowNewStack((v) => !v)}
-          >
-            <Plus size={14} /> New Stack
-          </button>
+          {spread?.stockSummary ? (
+            <span className="pill pill-accent num">
+              {spread.stockSummary.have}/{spread.stockSummary.total} in cabinet
+            </span>
+          ) : null}
         </div>
-      </div>
 
-      {showNewStack ? (
-        <form onSubmit={handleCreateStack} className="card row-wrap" role="dialog" aria-label="Create New Stack">
-          <input
-            type="text"
-            name="stackName"
-            placeholder="Stack name (e.g., Q4 Longevity & Derm)"
-            value={newStackName}
-            onChange={(e) => setNewStackName(e.target.value)}
-            style={{ flex: 1, minWidth: 200 }}
-            required
-          />
-          <button type="submit" className="btn btn-primary btn-sm">
-            Create Stack
-          </button>
-          <button type="button" className="btn btn-sm" onClick={() => setShowNewStack(false)}>
-            Cancel
-          </button>
-        </form>
-      ) : null}
-
-      {/* Controls: Have-Only & What-If Wishlist Simulation */}
-      <div className="card space-between">
         <div className="row-wrap">
-          <label className="row-wrap" style={{ cursor: 'pointer', fontWeight: 600 }}>
+          <label className={`toggle-chip${haveOnly ? ' active' : ''}`} data-testid="stack-toggle-have-only">
             <input
               type="checkbox"
-              data-testid="stack-toggle-have-only"
               checked={haveOnly}
               onChange={(e) => handleToggleHaveOnly(e.target.checked)}
             />
-            <span>Have-Only Mode (schedule owned items only)</span>
+            <span>In Stock Only</span>
           </label>
 
-          <label className="row-wrap" style={{ cursor: 'pointer', fontWeight: 600 }}>
+          <label className={`toggle-chip${whatIfEnabled ? ' active' : ''}`} data-testid="what-if-toggle">
             <input
               type="checkbox"
-              data-testid="what-if-toggle"
               checked={whatIfEnabled}
               onChange={(e) => {
                 setWhatIfEnabled(e.target.checked);
                 if (!e.target.checked) setWhatIfIds([]);
               }}
             />
-            <FlaskConical size={14} />
-            <span>What-If Wishlist Simulation</span>
+            <FlaskConical size={13} />
+            <span>What-If Preview</span>
           </label>
         </div>
-
-        {spread?.stockSummary ? (
-          <div className="row-wrap num">
-            <span className="pill pill-have">
-              In Stock: {spread.stockSummary.have}/{spread.stockSummary.total}
-            </span>
-            {spread.stockSummary.missing?.length > 0 ? (
-              <span className="pill pill-wishlist">
-                Missing/Wishlist: {spread.stockSummary.missing.length}
-              </span>
-            ) : null}
-          </div>
-        ) : null}
       </div>
 
-      {statusMsg ? <div className="banner-ok" role="status">{statusMsg}</div> : null}
-      {errorMsg ? <div className="banner-danger" role="alert">{errorMsg}</div> : null}
+      {whatIfEnabled ? (
+        <div className="banner-warn space-between" role="status">
+          <span>
+            <strong>What-If Preview Active</strong> — test adding wishlist items below without changing your saved stack ({whatIfIds.length} previewing).
+          </span>
+          {whatIfIds.length > 0 ? (
+            <button type="button" className="btn btn-sm" onClick={() => setWhatIfIds([])}>
+              Clear Preview
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
-      {/* NON-HIDEABLE HARD-STOP BANNER */}
+      {statusMsg ? (
+        <div className="banner-ok" role="status">
+          {statusMsg}
+        </div>
+      ) : null}
+
+      {errorMsg ? (
+        <div className="banner-danger" role="alert">
+          {errorMsg}
+        </div>
+      ) : null}
+
+      {/* NON-HIDEABLE HARD-STOP SAFETY BANNER */}
       {hardStops.length > 0 ? (
-        <section className="banner-danger stack-v" data-testid="hard-stop-banner" role="alert">
+        <section className="banner-danger stack-sm" data-testid="hard-stop-banner" role="alert">
           <div className="row-wrap">
-            <AlertOctagon size={20} />
-            <strong>HARD-STOP SAFETY ALERT ({hardStops.length}) — Do NOT Combine Without Clinician Clearance</strong>
+            <AlertOctagon size={18} />
+            <strong>Safety Hard-Stop ({hardStops.length}) — Review Before Combining</strong>
           </div>
           {hardStops.map((hs, idx) => (
-            <div key={hs.id || idx} style={{ fontSize: '0.9rem' }}>
+            <div key={hs.id || idx} style={{ fontSize: '0.88rem' }}>
               <strong>{hs.compoundName || (hs.compounds || []).map((c) => c.name).join(' + ')}:</strong>{' '}
               {hs.mechanism} — <em>{hs.recommendation}</em>
             </div>
@@ -418,61 +454,62 @@ export function StackBuilderView({
         </section>
       ) : null}
 
-      {/* Interaction & Safety Alerts Panel */}
-      <section className="card stack-v" data-testid="interaction-alerts">
-        <div className="row-wrap">
-          <AlertTriangle size={16} color="var(--gold)" />
-          <h2 style={{ margin: 0, fontSize: '1.05rem', color: 'var(--gold)' }}>
-            Interactions, Separation &amp; Safety Analysis
-          </h2>
+      {/* Interactions & Optimization Summary */}
+      <section className="card stack-sm" data-testid="interaction-alerts">
+        <div className="space-between">
+          <div className="row-wrap">
+            <AlertTriangle size={15} color="var(--accent)" />
+            <h2 className="section-heading">Interactions &amp; Smart Spacing</h2>
+          </div>
+          {loadingSpread ? <span className="dim">Recalculating…</span> : null}
         </div>
 
         {hardStops.map((hs, idx) => (
-          <div key={hs.id || `hs-${idx}`} className="banner-danger" style={{ fontSize: '0.86rem' }}>
+          <div key={hs.id || `hs-${idx}`} className="banner-danger" style={{ fontSize: '0.84rem' }}>
             <strong>Hard-Stop ({hs.compoundName || (hs.compounds || []).map((c) => c.name).join(' + ')}):</strong>{' '}
             {hs.mechanism} — <em>{hs.recommendation}</em>
           </div>
         ))}
 
         {missingSpf ? (
-          <div className="banner-warn">
-            <strong>Missing SPF Warning:</strong> {missingSpf}
+          <div className="banner-warn" style={{ fontSize: '0.84rem' }}>
+            <strong>Missing SPF:</strong> {missingSpf}
           </div>
         ) : null}
 
         {autoSeparated.map((sep, idx) => (
-          <div key={sep.id || idx} className="banner-ok" style={{ fontSize: '0.86rem' }}>
+          <div key={sep.id || idx} className="banner-ok" style={{ fontSize: '0.84rem' }}>
             <strong>Auto-Separated:</strong>{' '}
-            {(sep.compounds || []).map((c) => `${c.name} (${c.slotId})`).join(' vs ')} — {sep.recommendation || sep.mechanism}
+            {(sep.compounds || []).map((c) => `${c.name} (${c.slotId.replace(/_/g, ' ')})`).join(' vs ')} — {sep.recommendation || sep.mechanism}
           </div>
         ))}
 
         {alternateDayPairs.map((alt, idx) => (
-          <div key={alt.id || idx} className="banner-warn" style={{ fontSize: '0.86rem' }}>
-            <strong>Alternating Days/Nights:</strong> {alt.recommendation || alt.mechanism}
+          <div key={alt.id || idx} className="banner-warn" style={{ fontSize: '0.84rem' }}>
+            <strong>Alternating Nights/Days:</strong> {alt.recommendation || alt.mechanism}
           </div>
         ))}
 
         {ulWarnings.map((ul, idx) => (
-          <div key={ul.nutrientKey || idx} className="banner-warn" style={{ fontSize: '0.86rem' }}>
-            <strong>Adult UL Exceeded ({ul.nutrient}):</strong> {ul.totalAmount} {ul.unit} &gt; {ul.upperLimit} {ul.unit} — {ul.recommendation}
+          <div key={ul.nutrientKey || idx} className="banner-warn" style={{ fontSize: '0.84rem' }}>
+            <strong>Upper Limit ({ul.nutrient}):</strong> {ul.totalAmount} {ul.unit} &gt; {ul.upperLimit} {ul.unit} — {ul.recommendation}
           </div>
         ))}
 
         {safetyAlerts.filter((a) => a.severity !== 'hard_stop').map((al, idx) => (
-          <div key={al.id || idx} className="banner-warn" style={{ fontSize: '0.86rem' }}>
-            <strong>Safety Alert ({al.compoundName}):</strong> {al.mechanism}
+          <div key={al.id || idx} className="banner-warn" style={{ fontSize: '0.84rem' }}>
+            <strong>Safety Note ({al.compoundName}):</strong> {al.mechanism}
           </div>
         ))}
 
         {cautions.map((c, idx) => (
-          <div key={c.id || idx} className="muted" style={{ fontSize: '0.85rem' }}>
+          <div key={c.id || idx} className="muted" style={{ fontSize: '0.84rem' }}>
             • <strong>Caution:</strong> {c.mechanism}
           </div>
         ))}
 
         {synergies.map((s, idx) => (
-          <div key={s.id || idx} className="muted" style={{ fontSize: '0.85rem', color: 'var(--emerald)' }}>
+          <div key={s.id || idx} style={{ fontSize: '0.84rem', color: 'var(--success)' }}>
             ✦ <strong>Synergy:</strong> {(s.compounds || []).map((c) => c.name).join(' + ')} — {s.reason}
           </div>
         ))}
@@ -482,33 +519,258 @@ export function StackBuilderView({
         alternateDayPairs.length === 0 &&
         ulWarnings.length === 0 &&
         cautions.length === 0 &&
+        synergies.length === 0 &&
         !missingSpf ? (
           <p className="muted" style={{ margin: 0 }}>
-            No conflicts detected in the current stack.
+            All clear — no conflicts detected. Add compounds below to generate your smart daily spread.
           </p>
         ) : null}
       </section>
 
-      {/* Compound Picker Across All 4 Sections */}
+      {/* DUAL-TRACK SCHEDULE HERO */}
+      <div className="grid-2" style={{ alignItems: 'start' }}>
+        {/* Left: Systemic 8-Slot Timeline */}
+        <section className="card stack-sm" data-testid="spread-systemic-timeline">
+          <div className="space-between">
+            <div>
+              <div className="eyebrow">SYSTEMIC TRACK</div>
+              <h2 className="section-heading">Daily Schedule</h2>
+            </div>
+            <span className="pill num">8 timing windows</span>
+          </div>
+
+          {slots.map((slot) => {
+            const hasItems = (slot.items || []).length > 0;
+            return (
+              <div
+                key={slot.slotId}
+                className={`slot-card ${hasItems ? 'slot-populated' : 'slot-empty'}`}
+                data-testid={`spread-slot-${slot.slotId}`}
+              >
+                <div className="space-between">
+                  <strong style={{ fontSize: hasItems ? '0.92rem' : '0.8rem' }}>{slot.label}</strong>
+                  <span className={`pill num ${hasItems ? 'pill-accent' : ''}`}>{slot.suggestedTime}</span>
+                </div>
+
+                {hasItems
+                  ? slot.items.map((item) => (
+                      <article key={item.stackItemId || item.compoundId} className="slot-item stack-sm">
+                        <div className="space-between">
+                          <div className="row-wrap">
+                            <strong style={{ fontSize: '0.94rem' }}>{item.name}</strong>
+                            {item.doseDisplay ? <span className="pill pill-accent num">{item.doseDisplay}</span> : null}
+                            <span className={`pill pill-${item.ownershipStatus}`}>{item.ownershipStatus.replace(/_/g, ' ')}</span>
+                            {item.isWhatIf ? <span className="pill pill-wishlist">What-If</span> : null}
+                            {item.pinned ? <span className="pill pill-verified">Pinned</span> : null}
+                          </div>
+
+                          <div className="row-wrap">
+                            <button
+                              type="button"
+                              className="btn btn-sm"
+                              data-testid={`btn-pin-override-${item.compoundId}`}
+                              onClick={() => {
+                                setPinEditingItem({
+                                  compoundId: item.compoundId,
+                                  name: item.name,
+                                  pinned: Boolean(item.pinned),
+                                  initialSlot: slot.slotId,
+                                });
+                                setPinDraftSlot(slot.slotId);
+                              }}
+                            >
+                              <Pin size={12} /> {item.pinned ? 'Pinned' : 'Pin'}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-primary"
+                              data-testid={`btn-log-dose-${item.compoundId}`}
+                              onClick={() => handleLogDose(item, slot.slotId)}
+                            >
+                              <CheckCircle2 size={12} /> Log
+                            </button>
+                          </div>
+                        </div>
+
+                        {item.pinConflictWarning ? (
+                          <div className="banner-warn" style={{ fontSize: '0.78rem', padding: '0.4rem 0.65rem' }}>
+                            {item.pinConflictWarning}
+                          </div>
+                        ) : null}
+
+                        {(item.rationale || []).length > 0 ? (
+                          <div className="row-wrap">
+                            {item.rationale.map((r, i) => (
+                              <span key={i} className="pill" style={{ fontSize: '0.7rem' }}>
+                                <Sparkles size={9} /> {r}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
+                      </article>
+                    ))
+                  : null}
+              </div>
+            );
+          })}
+        </section>
+
+        {/* Right: Dermatology AM/PM + Skin Cycling + Hair/Scalp */}
+        <div className="stack-v">
+          <section className="card stack-sm" data-testid="spread-derm-am">
+            <div className="space-between">
+              <div className="row-wrap">
+                <Sun size={16} color="var(--accent)" />
+                <div>
+                  <div className="eyebrow">MORNING SKINCARE</div>
+                  <h2 className="section-heading">AM Layering (Steps 1–7)</h2>
+                </div>
+              </div>
+            </div>
+            {(spread?.dermatology?.skin?.am || []).length === 0 ? (
+              <p className="muted" style={{ margin: 0 }}>No morning skincare steps in this stack yet.</p>
+            ) : (
+              spread.dermatology.skin.am.map((st, idx) => (
+                <div key={st.compoundId || idx} className="card-subtle space-between">
+                  <div>
+                    <span className="pill pill-accent num" style={{ marginRight: 6 }}>Step {st.step}</span>
+                    <strong>{st.name}</strong>
+                  </div>
+                  <span className="pill">
+                    {(st.vehicleType || '').replace(/_/g, ' ')}
+                    {st.waitTimeMinutes > 0 ? ` · wait ${st.waitTimeMinutes}m` : ''}
+                  </span>
+                </div>
+              ))
+            )}
+          </section>
+
+          <section className="card stack-sm" data-testid="spread-derm-pm">
+            <div className="row-wrap">
+              <Moon size={16} color="var(--accent)" />
+              <div>
+                <div className="eyebrow">EVENING SKINCARE</div>
+                <h2 className="section-heading">PM Skin-Cycling Nights</h2>
+              </div>
+            </div>
+            {(spread?.dermatology?.skin?.pmNights || []).length === 0 ? (
+              <p className="muted" style={{ margin: 0 }}>No evening skincare actives in this stack yet.</p>
+            ) : (
+              spread.dermatology.skin.pmNights.map((night, idx) => (
+                <div key={idx} className="slot-card slot-populated stack-sm">
+                  <div className="space-between">
+                    <strong>{night.nightLabel}</strong>
+                    <span className="pill pill-accent">{night.theme}</span>
+                  </div>
+                  {(night.steps || []).map((st, sIdx) => (
+                    <div key={st.compoundId || sIdx} className="space-between" style={{ fontSize: '0.86rem' }}>
+                      <span>
+                        <span className="num" style={{ color: 'var(--accent)', marginRight: 6 }}>{st.step}.</span>
+                        {st.name}
+                      </span>
+                      <span className="dim">
+                        {st.waitTimeMinutes > 0 ? `Wait ${st.waitTimeMinutes}m` : (st.vehicleType || '').replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ))
+            )}
+            {microneedlingNotes.map((note, idx) => (
+              <div key={idx} className="banner-warn" style={{ fontSize: '0.82rem' }}>
+                <strong>Microneedling Buffer:</strong> {note}
+              </div>
+            ))}
+          </section>
+
+          <section className="card stack-sm" data-testid="spread-hair-scalp">
+            <div className="row-wrap">
+              <Scissors size={15} color="var(--accent)" />
+              <div>
+                <div className="eyebrow">SCALP &amp; HAIR</div>
+                <h2 className="section-heading">Hair Routine</h2>
+              </div>
+            </div>
+            {['am', 'pm', 'weekly'].every((k) => (spread?.dermatology?.hairScalp?.[k] || []).length === 0) ? (
+              <p className="muted" style={{ margin: 0 }}>No scalp or hair treatments in this stack yet.</p>
+            ) : (
+              ['am', 'pm', 'weekly'].map((bucket) => {
+                const list = spread?.dermatology?.hairScalp?.[bucket] || [];
+                if (list.length === 0) return null;
+                return (
+                  <div key={bucket} className="stack-sm">
+                    <div className="eyebrow">{bucket}</div>
+                    {list.map((st, idx) => (
+                      <div key={st.compoundId || idx} className="card-subtle space-between">
+                        <strong>{st.name}</strong>
+                        <span className="pill">{(st.vehicleType || '').replace(/_/g, ' ')}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })
+            )}
+          </section>
+        </div>
+      </div>
+
+      {/* Clean Searchable Cross-Section Compound Picker */}
       <section className="card stack-v" data-testid="stack-compound-picker">
         <div className="space-between">
-          <h2 style={{ margin: 0, fontSize: '1.05rem', color: 'var(--gold)' }}>
-            {whatIfEnabled ? 'Add Compounds to What-If Preview' : 'Add Compounds to Stack (All Sections)'}
-          </h2>
-          <span className="muted">{compounds.length} available in catalog</span>
+          <div>
+            <div className="eyebrow">{whatIfEnabled ? 'WHAT-IF SIMULATOR' : 'BUILD YOUR STACK'}</div>
+            <h2 className="section-heading">
+              {whatIfEnabled ? 'Pick Wishlist Compounds to Preview' : 'Choose Compounds Across All Sections'}
+            </h2>
+          </div>
+
+          <div className="search-wrap" style={{ maxWidth: 240 }}>
+            <Search size={13} className="search-icon" aria-hidden="true" />
+            <input
+              type="text"
+              placeholder="Filter compounds…"
+              aria-label="Filter compounds to add to stack"
+              value={pickerQuery}
+              onChange={(e) => setPickerQuery(e.target.value)}
+            />
+          </div>
         </div>
 
-        <div className="row-wrap">
-          {(compounds || []).map((cmp) => {
+        <div className="section-tabs">
+          {PICKER_SECTIONS.map((ps) => (
+            <button
+              key={ps.id}
+              type="button"
+              className={`tab-btn${pickerSection === ps.id ? ' active' : ''}`}
+              onClick={() => setPickerSection(ps.id)}
+            >
+              {ps.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid-2">
+          {visiblePickerCompounds.map((cmp) => {
             const inStack = stackItemIds.has(cmp.id);
             const inWhatIf = whatIfIds.includes(cmp.id);
             return (
-              <div key={cmp.id} className="row-wrap" style={{ padding: '0.35rem 0.55rem', background: 'var(--bg-elev)', borderRadius: 8, border: '1px solid var(--border)' }}>
-                <span style={{ fontSize: '0.84rem', fontWeight: 600 }}>{cmp.name}</span>
-                <span className="pill">{cmp.sectionId}</span>
+              <div key={cmp.id} className="card-subtle space-between">
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{cmp.name}</div>
+                  <div className="dim">
+                    {cmp.sectionId.replace(/_/g, ' ')}
+                    {cmp.dosages?.rangeText ? ` · ${cmp.dosages.rangeText}` : ''}
+                  </div>
+                </div>
+
                 {inStack && !whatIfEnabled ? (
-                  <button type="button" className="btn btn-sm btn-danger" onClick={() => handleRemoveFromStack(cmp.id)}>
-                    Remove
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-success"
+                    onClick={() => handleRemoveFromStack(cmp.id)}
+                    title="Click to remove from stack"
+                  >
+                    <Check size={13} /> In Stack
                   </button>
                 ) : (
                   <button
@@ -518,7 +780,7 @@ export function StackBuilderView({
                     onClick={() => handleAddCompound(cmp)}
                     disabled={whatIfEnabled && inWhatIf}
                   >
-                    {whatIfEnabled ? (inWhatIf ? 'In What-If' : '+ What-If') : '+ Add'}
+                    {whatIfEnabled ? (inWhatIf ? 'Previewing' : '+ Preview') : '+ Add'}
                   </button>
                 )}
               </div>
@@ -527,194 +789,100 @@ export function StackBuilderView({
         </div>
       </section>
 
-      {/* DUAL-TRACK SPREAD OUTPUT */}
-      {loadingSpread ? <div className="card muted">Computing optimal dual-track schedule…</div> : null}
-
-      <div className="grid-2">
-        {/* Track 1: Systemic 8-Slot Timeline */}
-        <section className="card stack-v" data-testid="spread-systemic-timeline">
-          <h2 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--gold)' }}>
-            Systemic Schedule (8 Daily Slots)
-          </h2>
-          {(spread?.systemic?.slots || SYSTEMIC_SLOTS.map((s) => ({ slotId: s.id, label: s.label, suggestedTime: '—', items: [] }))).map((slot) => (
-            <div key={slot.slotId} className="slot-card" data-testid={`spread-slot-${slot.slotId}`}>
-              <div className="space-between">
-                <strong>{slot.label}</strong>
-                <span className="pill num">{slot.suggestedTime}</span>
+      {/* Pin Slot Override Sheet */}
+      {pinEditingItem ? (
+        <div
+          className="modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Pin slot override for ${pinEditingItem.name}`}
+        >
+          <div className="modal-card stack-v" style={{ maxWidth: 420 }}>
+            <div className="space-between">
+              <div>
+                <div className="eyebrow">TIMING OVERRIDE</div>
+                <h2 className="display-sm">Pin {pinEditingItem.name}</h2>
               </div>
-              {(slot.items || []).length === 0 ? (
-                <div className="muted" style={{ fontSize: '0.8rem', marginTop: 4 }}>No items scheduled</div>
-              ) : (
-                slot.items.map((item) => (
-                  <article key={item.stackItemId || item.compoundId} className="slot-item stack-v" style={{ gap: '0.35rem' }}>
-                    <div className="space-between">
-                      <div className="row-wrap">
-                        <strong>{item.name}</strong>
-                        <span className="pill num">{item.doseDisplay}</span>
-                        <span className={`pill pill-${item.ownershipStatus}`}>{item.ownershipStatus}</span>
-                        {item.isWhatIf ? <span className="pill pill-wishlist">What-If</span> : null}
-                        {item.pinned ? <span className="pill pill-verified">Pinned</span> : null}
-                      </div>
-                      <div className="row-wrap">
-                        <button
-                          type="button"
-                          className="btn btn-sm"
-                          data-testid={`btn-pin-override-${item.compoundId}`}
-                          onClick={() => setPinEditingId(pinEditingId === item.compoundId ? null : item.compoundId)}
-                        >
-                          <Pin size={12} /> {item.pinned ? 'Change Pin' : 'Pin'}
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-primary"
-                          data-testid={`btn-log-dose-${item.compoundId}`}
-                          onClick={() => handleLogDose(item, slot.slotId)}
-                        >
-                          <CheckCircle2 size={12} /> Log
-                        </button>
-                      </div>
-                    </div>
-
-                    {pinEditingId === item.compoundId ? (
-                      <div
-                        role="dialog"
-                        aria-label={`Pin slot override for ${item.name}`}
-                        className="row-wrap"
-                        style={{ padding: '0.5rem', background: 'var(--bg-card)', borderRadius: 8, border: '1px solid var(--border-strong)' }}
-                      >
-                        <select
-                          aria-label={`Select pinned slot for ${item.name}`}
-                          defaultValue={slot.slotId}
-                          onChange={(e) => handlePinSlot(item.compoundId, e.target.value)}
-                        >
-                          <option value="">Auto (Unpin)</option>
-                          {SYSTEMIC_SLOTS.map((s) => (
-                            <option key={s.id} value={s.id}>
-                              {s.label}
-                            </option>
-                          ))}
-                        </select>
-                        {item.pinned ? (
-                          <button type="button" className="btn btn-sm" onClick={() => handlePinSlot(item.compoundId, null)}>
-                            Unpin
-                          </button>
-                        ) : null}
-                        <button type="button" className="btn btn-sm" onClick={() => setPinEditingId(null)}>
-                          Close
-                        </button>
-                      </div>
-                    ) : null}
-
-                    {item.pinConflictWarning ? (
-                      <div className="banner-warn" style={{ fontSize: '0.78rem', padding: '0.4rem 0.6rem' }}>
-                        {item.pinConflictWarning}
-                      </div>
-                    ) : null}
-
-                    {(item.rationale || []).length > 0 ? (
-                      <div className="row-wrap">
-                        {item.rationale.map((r, i) => (
-                          <span key={i} className="pill" style={{ fontSize: '0.72rem' }}>
-                            <Sparkles size={10} /> {r}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-                  </article>
-                ))
-              )}
+              <button type="button" className="btn btn-sm" onClick={() => setPinEditingItem(null)}>
+                Close
+              </button>
             </div>
-          ))}
-        </section>
-
-        {/* Track 2: Dermatology Skin (AM/PM Skin Cycling) + Hair/Scalp */}
-        <div className="stack-v">
-          <section className="card stack-v" data-testid="spread-derm-am">
-            <h2 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--gold)' }}>
-              Dermatology — Skin AM Routine (Steps 1–7)
-            </h2>
-            {missingSpf ? (
-              <div className="banner-warn" style={{ fontSize: '0.84rem' }}>
-                {missingSpf}
-              </div>
-            ) : null}
-            {(spread?.dermatology?.skin?.am || []).length === 0 ? (
-              <p className="muted" style={{ margin: 0 }}>No AM facial products in stack.</p>
-            ) : (
-              spread.dermatology.skin.am.map((st) => (
-                <div key={st.compoundId} className="slot-card">
-                  <div className="space-between">
-                    <strong>
-                      Step {st.step}: {st.name}
-                    </strong>
-                    <span className="pill">{st.vehicleType}{st.waitTimeMinutes > 0 ? ` · wait ${st.waitTimeMinutes}m` : ''}</span>
-                  </div>
-                  <div className="muted" style={{ fontSize: '0.8rem' }}>{(st.rationale || []).join(' · ')}</div>
-                </div>
-              ))
-            )}
-          </section>
-
-          <section className="card stack-v" data-testid="spread-derm-pm">
-            <h2 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--gold)' }}>
-              Dermatology — Skin PM Nights &amp; Skin Cycling
-            </h2>
-            {microNotes.map((note, idx) => (
-              <div key={idx} className="banner-warn" style={{ fontSize: '0.84rem' }}>
-                {note}
-              </div>
-            ))}
-            {(spread?.dermatology?.skin?.pmNights || []).length === 0 ? (
-              <p className="muted" style={{ margin: 0 }}>No PM facial routines in stack.</p>
-            ) : (
-              spread.dermatology.skin.pmNights.map((night, idx) => (
-                <div key={idx} className="slot-card stack-v" style={{ gap: '0.4rem' }}>
-                  <div className="space-between">
-                    <strong>{night.nightLabel}</strong>
-                    <span className="pill">Days: {(night.daysOfWeek || []).join(', ')}</span>
-                  </div>
-                  {(night.steps || []).map((st) => (
-                    <div key={st.compoundId} className="space-between" style={{ fontSize: '0.86rem' }}>
-                      <span>
-                        Step {st.step}: <strong>{st.name}</strong>
-                      </span>
-                      <span className="muted">{st.waitTimeMinutes > 0 ? `Wait ${st.waitTimeMinutes}m` : st.vehicleType}</span>
-                    </div>
-                  ))}
-                </div>
-              ))
-            )}
-          </section>
-
-          <section className="card stack-v" data-testid="spread-hair-scalp">
-            <h2 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--gold)' }}>
-              Dermatology — Hair &amp; Scalp Track (Isolated)
-            </h2>
-            {['am', 'pm', 'weekly'].map((bucket) => {
-              const items = spread?.dermatology?.hairScalp?.[bucket] || [];
-              if (items.length === 0) return null;
-              return (
-                <div key={bucket} className="slot-card stack-v" style={{ gap: '0.35rem' }}>
-                  <strong style={{ textTransform: 'uppercase', fontSize: '0.8rem', color: 'var(--gold)' }}>
-                    Hair / Scalp — {bucket}
-                  </strong>
-                  {items.map((st) => (
-                    <div key={`${bucket}_${st.compoundId}`} className="space-between">
-                      <span>{st.name}</span>
-                      <span className="pill">{st.vehicleType}</span>
-                    </div>
-                  ))}
-                </div>
-              );
-            })}
-            {(spread?.dermatology?.hairScalp?.am?.length || 0) +
-              (spread?.dermatology?.hairScalp?.pm?.length || 0) +
-              (spread?.dermatology?.hairScalp?.weekly?.length || 0) === 0 ? (
-              <p className="muted" style={{ margin: 0 }}>No hair or scalp treatments in stack.</p>
-            ) : null}
-          </section>
+            <label className="field-label">
+              Preferred Daily Window
+              <select
+                aria-label={`Select pinned slot for ${pinEditingItem.name}`}
+                value={pinDraftSlot}
+                onChange={(e) => {
+                  const nextSlot = e.target.value;
+                  setPinDraftSlot(nextSlot);
+                  handlePinSlot(pinEditingItem.compoundId, nextSlot, { close: false });
+                }}
+              >
+                <option value="">Auto (Smart Timing)</option>
+                {SYSTEMIC_SLOTS.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="row-wrap" style={{ justifyContent: 'flex-end' }}>
+              {pinEditingItem.pinned ? (
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => handlePinSlot(pinEditingItem.compoundId, null, { close: true })}
+                >
+                  Unpin
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => setPinEditingItem(null)}
+              >
+                Save Pin
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
+      ) : null}
+
+      {/* New Stack Sheet */}
+      {showNewStack ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Create New Stack">
+          <div className="modal-card stack-v" style={{ maxWidth: 420 }}>
+            <div className="space-between">
+              <div>
+                <div className="eyebrow">NEW PROTOCOL</div>
+                <h2 className="display-sm">Create Stack</h2>
+              </div>
+              <button type="button" className="btn btn-sm" onClick={() => setShowNewStack(false)}>
+                Close
+              </button>
+            </div>
+            <form onSubmit={handleCreateStack} className="stack-v">
+              <label className="field-label">
+                Stack Name
+                <input
+                  type="text"
+                  name="name"
+                  placeholder="e.g., Daily Longevity & Skincare"
+                  value={newStackName}
+                  onChange={(e) => setNewStackName(e.target.value)}
+                  autoFocus
+                />
+              </label>
+              <div className="row-wrap" style={{ justifyContent: 'flex-end' }}>
+                <button type="button" className="btn" onClick={() => setShowNewStack(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary">
+                  Create Stack
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
