@@ -34,6 +34,8 @@ export function SettingsView({
   settings,
   rev,
   compounds,
+  localMode = false,
+  onConnectRemote,
   onRefresh,
   onLockNow,
 }) {
@@ -406,8 +408,17 @@ export function SettingsView({
               Cloud Sync, Snapshots & Multi-Format Export
             </h2>
           </div>
-          <span className="pill num">Revision #{rev ?? 0}</span>
+          <div className="row-wrap">
+            <span className="pill">{localMode ? 'Local Browser Mode' : 'Cloud / Server Mode'}</span>
+            <span className="pill num">Revision #{rev ?? 0}</span>
+          </div>
         </div>
+
+        {localMode ? (
+          <div className="banner-ok" style={{ fontSize: '0.84rem' }}>
+            Running privately in <strong>Local Browser Mode</strong> (saved in this browser). Everything works offline with zero server setup. To enable cross-device sync and live Gemini/Claude/Grok/GPT/Muse MCP access, deploy the Cloudflare Worker (see <code>DEPLOY.md</code>) and enter your Worker URL below.
+          </div>
+        ) : null}
 
         <div className="row-wrap" style={{ alignItems: 'flex-end' }}>
           <label className="field-label" style={{ flex: '1 1 260px' }}>

@@ -607,10 +607,29 @@ export function SectionsView({
 
       {/* Compound Grid */}
       {filteredCompounds.length === 0 ? (
-        <div className="card stack-v" style={{ textAlign: 'center', padding: '2rem' }}>
+        <div className="card stack-v" style={{ textAlign: 'center', padding: '2rem', alignItems: 'center' }}>
           <p className="muted" style={{ margin: 0 }}>
-            No compounds match this section and filter yet. Add a compound, ask an AI via MCP, or load the Starter Reference Catalog in Cabinet.
+            {(compounds || []).length === 0
+              ? 'Your household catalog is clean and ready. Add your first compound, paste AI-researched JSON, or load 26 generic starter reference profiles across all 4 sections.'
+              : 'No compounds match this section and filter yet.'}
           </p>
+          {(compounds || []).length === 0 ? (
+            <div className="row-wrap" style={{ justifyContent: 'center' }}>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={async () => {
+                  await api.post('/api/v1/seed/starter', {});
+                  await onRefresh();
+                }}
+              >
+                <Sparkles size={14} /> Load 26 Starter Reference Profiles
+              </button>
+              <button type="button" className="btn btn-sm" onClick={() => setShowAddModal(true)}>
+                <Plus size={14} /> Add Compound
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : (
         <div className="grid-3">

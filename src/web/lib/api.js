@@ -4,6 +4,8 @@
  * `?token=` from `window.history.replaceState` so credentials never linger in the URL bar.
  */
 
+import { handleLocalApiRequest, isLocalModeEnabled, setLocalModeEnabled } from './local-backend.js';
+
 const TOKEN_STORAGE_KEY = 'hp_session_token_v1';
 const BASE_URL_STORAGE_KEY = 'hp_api_base_url_v1';
 
@@ -16,6 +18,7 @@ export function bootstrapTokenFromUrl() {
     const qTok = url.searchParams.get('token');
     if (qTok && qTok.trim()) {
       memoryToken = qTok.trim();
+      setLocalModeEnabled(false);
       try {
         window.sessionStorage.setItem(TOKEN_STORAGE_KEY, memoryToken);
       } catch {
@@ -50,13 +53,19 @@ export function setAuthToken(token) {
   }
 }
 
-export function getApiBaseUrl() {
+export function getCustomApiBaseUrl() {
   try {
     const custom = window.localStorage.getItem(BASE_URL_STORAGE_KEY);
     if (custom && custom.trim()) return custom.trim().replace(/\/+$/, '');
   } catch {
     // ignore
   }
+  return '';
+}
+
+export function getApiBaseUrl() {
+  const custom = getCustomApiBaseUrl();
+  if (custom) return custom;
   return typeof window !== 'undefined' ? window.location.origin : '';
 }
 
@@ -71,6 +80,9 @@ export function setApiBaseUrl(url) {
 }
 
 export async function apiRequest(method, path, body = undefined, { headers = {}, rawText = false } = {}) {
+  if (isLocalModeEnabled()) {
+    return handleLocalApiRequest(method, path, body, { headers, rawText });
+  }
   const base = getApiBaseUrl();
   const token = getAuthToken();
   const reqHeaders = {

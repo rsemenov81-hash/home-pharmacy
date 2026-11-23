@@ -1,6 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { api, bootstrapTokenFromUrl, getAuthToken, setAuthToken } from './lib/api.js';
+import {
+  api,
+  bootstrapTokenFromUrl,
+  getAuthToken,
+  getCustomApiBaseUrl,
+  setAuthToken,
+} from './lib/api.js';
+import {
+  isLocalModeEnabled,
+  setLocalModeEnabled,
+  shouldAutoEnterLocalMode,
+} from './lib/local-backend.js';
 import { getPinConfig, loadCachedHub, loadTheme, saveCachedHub, saveTheme } from './lib/state.js';
 import { AppShell, AuthGate, PinLockOverlay } from './components/AppShell.jsx';
 import { SectionsView } from './components/SectionsView.jsx';
@@ -11,13 +22,23 @@ import { AiHubView } from './components/AiHubView.jsx';
 import { SettingsView } from './components/SettingsView.jsx';
 
 function App() {
-  const [initialToken] = useState(() => bootstrapTokenFromUrl());
+  const [bootConfig] = useState(() => {
+    const token = bootstrapTokenFromUrl();
+    const hasCustomApiUrl = Boolean(getCustomApiBaseUrl());
+    const useLocal = shouldAutoEnterLocalMode({ hasToken: Boolean(token), hasCustomApiUrl });
+    if (useLocal) {
+      setLocalModeEnabled(true);
+    }
+    return { initialToken: token, useLocal };
+  });
+
   const [theme, setTheme] = useState(() => saveTheme(loadTheme()));
   const [authenticated, setAuthenticated] = useState(false);
-  const [booting, setBooting] = useState(() => Boolean(initialToken));
+  const [booting, setBooting] = useState(() => Boolean(bootConfig.initialToken || bootConfig.useLocal));
   const [authError, setAuthError] = useState('');
   const [pinLocked, setPinLocked] = useState(() => Boolean(getPinConfig()?.enabled));
   const [offline, setOffline] = useState(false);
+  const [localMode, setLocalMode] = useState(() => isLocalModeEnabled());
 
   const [hub, setHub] = useState(null);
   const [activeTab, setActiveTab] = useState('sections');
@@ -33,6 +54,7 @@ function App() {
       setAuthenticated(true);
       setAuthError('');
       setOffline(false);
+      setLocalMode(isLocalModeEnabled());
       saveCachedHub(data);
       setActiveMemberId((prev) => {
         const members = data?.members || [];
@@ -50,7 +72,7 @@ function App() {
       }
       if (allowOfflineFallback) {
         const cached = loadCachedHub();
-        if (cached && getAuthToken()) {
+        if (cached && (getAuthToken() || isLocalModeEnabled())) {
           setHub(cached);
           setAuthenticated(true);
           setOffline(true);
@@ -65,7 +87,7 @@ function App() {
   useEffect(() => {
     let active = true;
     async function boot() {
-      if (!initialToken) {
+      if (!bootConfig.initialToken && !bootConfig.useLocal) {
         if (active) {
           setAuthenticated(false);
           setBooting(false);
@@ -79,21 +101,23 @@ function App() {
     return () => {
       active = false;
     };
-  }, [initialToken, loadHubState]);
+  }, [bootConfig, loadHubState]);
 
   // Register Service Worker for offline PWA resilience & optional push reminders
   useEffect(() => {
     if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
     }
   }, []);
 
   // Online/offline listeners
   useEffect(() => {
     const onOnline = () => {
-      if (getAuthToken()) loadHubState({ allowOfflineFallback: true });
+      if (getAuthToken() || isLocalModeEnabled()) loadHubState({ allowOfflineFallback: true });
     };
-    const onOffline = () => setOffline(true);
+    const onOffline = () => {
+      if (!isLocalModeEnabled()) setOffline(true);
+    };
     window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);
     return () => {
@@ -103,6 +127,8 @@ function App() {
   }, [loadHubState]);
 
   const handleConnect = async (token) => {
+    setLocalModeEnabled(false);
+    setLocalMode(false);
     setAuthToken(token);
     setAuthError('');
     await loadHubState({ allowOfflineFallback: false });
@@ -215,6 +241,8 @@ function App() {
           settings={hub?.settings || {}}
           rev={hub?._rev ?? 0}
           compounds={compounds}
+          localMode={localMode}
+          onConnectRemote={handleConnect}
           onRefresh={() => loadHubState({ allowOfflineFallback: true })}
           onLockNow={() => setPinLocked(true)}
         />

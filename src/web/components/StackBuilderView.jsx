@@ -10,10 +10,6 @@ export function StackBuilderView({
   stacks,
   onRefresh,
 }) {
-  const memberStacks = useMemo(
-    () => (stacks || []).filter((s) => s.memberId === activeMemberId),
-    [stacks, activeMemberId],
-  );
   const [selectedStackId, setSelectedStackId] = useState('');
   const [haveOnly, setHaveOnly] = useState(false);
   const [whatIfEnabled, setWhatIfEnabled] = useState(false);
@@ -26,6 +22,14 @@ export function StackBuilderView({
   const [statusMsg, setStatusMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [optimisticItemsByStack, setOptimisticItemsByStack] = useState({});
+  const [optimisticStacks, setOptimisticStacks] = useState([]);
+
+  const memberStacks = useMemo(() => {
+    const base = (stacks || []).filter((s) => s.memberId === activeMemberId);
+    const seen = new Set(base.map((s) => s.id));
+    const extras = optimisticStacks.filter((s) => s.memberId === activeMemberId && !seen.has(s.id));
+    return [...base, ...extras];
+  }, [stacks, optimisticStacks, activeMemberId]);
 
   const pendingOpsRef = useRef(0);
   const queueRef = useRef(Promise.resolve());
@@ -136,12 +140,13 @@ export function StackBuilderView({
       const created = res.json?.stack;
       setNewStackName('');
       setShowNewStack(false);
-      await onRefresh();
       if (created?.id) {
         latestItemsByStackRef.current.set(created.id, []);
+        setOptimisticStacks((prev) => [...prev.filter((s) => s.id !== created.id), created]);
         setSelectedStackId(created.id);
       }
       setStatusMsg(`Created stack "${clean}".`);
+      await onRefresh();
     } catch (err) {
       setErrorMsg(err.message || 'Could not create stack.');
     }
